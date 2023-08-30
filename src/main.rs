@@ -6,7 +6,7 @@ use my_cli::{
     mover,
 };
 use resolve_path::PathResolveExt;
-/// Simple program to greet a person
+/// 󰉊 Blazing fast project manager CLI 󰉊
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
@@ -102,7 +102,5 @@ fn parse() {
 }
 
 fn main() {
-    //  let _ = parse();
     parse();
-    // Ok(());
 }
