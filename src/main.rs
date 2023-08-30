@@ -69,7 +69,8 @@ fn parse() {
         Commands::Add { add_type } => match &add_type {
             TypeOfAdds::L { language_name } => {
                 let lg = create_language(&mut conn, language_name);
-                println!("{:?}", lg);
+                let table = tabled::Table::new(vec![lg.clone()]).to_string();
+                println!("{}", table);
             }
             TypeOfAdds::P {
                 project_path,
@@ -80,7 +81,8 @@ fn parse() {
                 match path_item.to_str() {
                     Some(val) => {
                         let prj = create_project(&mut conn, project_name, val, language);
-                        println!("{:?}", prj);
+                        let table = tabled::Table::new(vec![prj.clone()]).to_string();
+                        println!("{}", table);
                     }
                     None => {
                         panic!("No valid path");
@@ -93,9 +95,15 @@ fn parse() {
             lang_query,
         } => {
             if *lang_query {
-                println!("{:?}", fetch_languages(&mut conn, language));
+                println!(
+                    "{}",
+                    tabled::Table::new(fetch_languages(&mut conn, language)).to_string()
+                );
             } else {
-                println!("{:?}", fetch_projects(&mut conn, language));
+                println!(
+                    "{}",
+                    tabled::Table::new(fetch_projects(&mut conn, language)).to_string()
+                );
             }
         }
     }

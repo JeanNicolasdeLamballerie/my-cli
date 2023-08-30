@@ -1,6 +1,6 @@
 use diesel::prelude::*;
-
-#[derive(Queryable, Selectable, Identifiable, PartialEq, Debug, Clone)]
+use tabled::Tabled;
+#[derive(Queryable, Selectable, Identifiable, PartialEq, Debug, Clone, Tabled)]
 #[diesel(table_name = crate::schema::languages)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Language {
@@ -14,7 +14,7 @@ pub struct NewLanguage<'a> {
     pub name: &'a str,
 }
 
-#[derive(Queryable, Selectable, Identifiable, Associations, PartialEq, Debug, Clone)]
+#[derive(Queryable, Selectable, Identifiable, Associations, PartialEq, Debug, Clone, Tabled)]
 #[diesel(table_name = crate::schema::projects)]
 #[diesel(belongs_to(Language))]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
