@@ -6,7 +6,6 @@ use my_cli::{
     mover,
 };
 use resolve_path::PathResolveExt;
-use std::env;
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -64,15 +63,9 @@ enum Commands {
 fn parse() {
     let cli = Cli::parse();
 
-    let path = env::current_dir().expect("No dir ?");
-    println!("The current directory is {}", path.display());
-    println!("Hello {:?}!", cli);
     let mut conn = establish_connection();
     match &cli.command {
-        Commands::Move { name } => {
-            println!("'myapp add' was used, name is: {name:?}");
-            mover::move_to(name)
-        }
+        Commands::Move { name } => mover::move_to(&mut conn, name),
         Commands::Add { add_type } => match &add_type {
             TypeOfAdds::L { language_name } => {
                 let lg = create_language(&mut conn, language_name);

@@ -3,12 +3,21 @@ use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use dotenvy::dotenv;
 use std::env;
+use std::path::Path;
+
 pub fn establish_connection() -> SqliteConnection {
     dotenv().ok();
-
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    //todo dotenv for devs
+    let mut database_path = match env::current_exe() {
+        Ok(exe_path) => exe_path.to_owned(),
+        Err(e) => panic!("failed to get current exe path: {e}"),
+    };
+    database_path.pop();
+    database_path.push(Path::new("projects.db"));
+    let database_url: &str = database_path.to_str().unwrap();
+    // env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     SqliteConnection::establish(&database_url)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
+        .unwrap_or_else(|_| panic!("Error connecting to database url..."))
 }
 
 use crate::models::{Language, NewLanguage};
@@ -44,6 +53,16 @@ pub fn fetch_projects(conn: &mut SqliteConnection, language: &str) -> Vec<Projec
         }
     }
 }
+pub fn fetch_single_project(conn: &mut SqliteConnection, name: &str) -> Project {
+    return projects::table
+        .filter(projects::dsl::name.eq(name))
+        .select(Project::as_select())
+        .load(conn)
+        .expect("error handling language")
+        .pop()
+        .expect("the directory was not found");
+}
+
 pub fn fetch_languages(conn: &mut SqliteConnection, language: &str) -> Vec<Language> {
     match language {
         "all" | "a" => {

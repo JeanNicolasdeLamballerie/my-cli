@@ -2,8 +2,14 @@
 //
 // use crate::database;
 
+use diesel::SqliteConnection;
+
+use crate::database;
 //use std::io;
-pub fn move_to(name: &Option<String>) {
-    let _ = name.is_none();
-    unimplemented!()
+pub fn move_to(conn: &mut SqliteConnection, name: &Option<String>) {
+    let project = match name {
+        Some(n) => database::fetch_single_project(conn, n),
+        None => panic!("no name found"),
+    };
+    println!("{}", project.path);
 }
