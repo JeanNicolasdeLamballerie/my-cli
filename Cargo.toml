@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.4.1", features = ["derive"] }
+derive_builder = "0.12.0"
 diesel = { version = "2.1.1", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
 dotenvy = "0.15.7"
 resolve-path = "0.1.0"
