@@ -3,9 +3,12 @@ use my_cli::{
     database::{
         create_language, create_project, establish_connection, fetch_languages, fetch_projects,
     },
+    logger::{self, print},
     mover,
 };
 use resolve_path::PathResolveExt;
+use tabled::Table;
+
 /// 󰉊 Blazing fast project manager CLI 󰉊
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -27,7 +30,6 @@ enum TypeOfAdds {
     P {
         project_path: String,
         project_name: String,
-
         //The language to register the project with
         #[arg(short, long)]
         language: String,
@@ -62,14 +64,20 @@ enum Commands {
 }
 fn parse() {
     let cli = Cli::parse();
-
+    let mut default_settings = logger::TablingOptionsBuilder::default();
+    let settings = default_settings
+        .color(Some(String::from("default")))
+        .first_row_color(Some(String::from("magenta")))
+        .first_col_color(Some(String::from("blue")))
+        .header(Some(String::from("Query result :")));
     let mut conn = establish_connection();
     match &cli.command {
         Commands::Move { name } => mover::move_to(&mut conn, name),
         Commands::Add { add_type } => match &add_type {
             TypeOfAdds::L { language_name } => {
                 let lg = create_language(&mut conn, language_name);
-                println!("{:?}", lg);
+                let mut table = tabled::Table::new(vec![lg.clone()]);
+                print(&mut table, settings);
             }
             TypeOfAdds::P {
                 project_path,
@@ -80,7 +88,8 @@ fn parse() {
                 match path_item.to_str() {
                     Some(val) => {
                         let prj = create_project(&mut conn, project_name, val, language);
-                        println!("{:?}", prj);
+                        let mut table = tabled::Table::new(vec![prj.clone()]);
+                        print(&mut table, settings);
                     }
                     None => {
                         panic!("No valid path");
@@ -93,9 +102,25 @@ fn parse() {
             lang_query,
         } => {
             if *lang_query {
-                println!("{:?}", fetch_languages(&mut conn, language));
+                let languages = fetch_languages(&mut conn, language);
+                let length = languages.len();
+                let mut table = Table::new(languages);
+                print(
+                    &mut table,
+                    settings.clone().header(Some(
+                        format!("Language query result : {} language(s)", length).to_string(),
+                    )),
+                );
             } else {
-                println!("{:?}", fetch_projects(&mut conn, language));
+                let projects = fetch_projects(&mut conn, language);
+                let length = projects.len();
+                let mut table = Table::new(projects);
+                print(
+                    &mut table,
+                    settings.clone().header(Some(
+                        format!("Project query result : {} project(s)", length).to_string(),
+                    )),
+                );
             }
         }
     }
