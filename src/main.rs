@@ -1,10 +1,11 @@
-use clap::{Parser, Subcommand};
+use clap::{Arg, Parser, Subcommand};
 use my_cli::{
     database::{
         create_language, create_project, establish_connection, fetch_languages, fetch_projects,
     },
     logger::{self, print},
     mover,
+    run::run_command,
 };
 use resolve_path::PathResolveExt;
 use tabled::Table;
@@ -61,6 +62,14 @@ enum Commands {
         #[arg(short, long, default_value_t = false)]
         lang_query: bool,
     },
+    Run {
+        //NOTE : This order is important, setting command before name allows name to become a
+        //positional argument
+        command: String,
+        /// If not present, defaults to current directory.
+        #[arg(num_args(1..))]
+        name: Option<String>,
+    },
 }
 fn parse() {
     let cli = Cli::parse();
@@ -73,6 +82,7 @@ fn parse() {
     let mut conn = establish_connection();
     match &cli.command {
         Commands::Move { name } => mover::move_to(&mut conn, name),
+        Commands::Run { name, command } => run_command(&mut conn, name, command),
         Commands::Add { add_type } => match &add_type {
             TypeOfAdds::L { language_name } => {
                 let lg = create_language(&mut conn, language_name);
