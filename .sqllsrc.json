@@ -1,0 +1,6 @@
+    {
+      "name": "cli_db",
+      "adapter": "sqlite3",
+      "filename": "./target/debug/projects.db",
+    }
+
