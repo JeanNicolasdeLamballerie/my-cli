@@ -82,6 +82,7 @@ enum Commands {
         command: Option<String>,
     },
 }
+// TODO : Fix that mess for run & SSH. Disabled for now.
 fn parse() {
     // let dt_start = chrono::Utc::now();
     let timestamp_start = SystemTime::now();
@@ -95,15 +96,15 @@ fn parse() {
     let mut conn = establish_connection();
     run_migration(&mut conn);
     match &cli.command {
-        Commands::Ssh {
-            new,
-            name,
-            user,
-            host,
-            // TODO : Generate the struct here. Messing up the argument order is too easy
-        } => ssh_into(&mut conn, new, name, host, user, settings),
+        // Commands::Ssh {
+        //     new,
+        //     name,
+        //     user,
+        //     host,
+        //     // TODO : Generate the struct here. Messing up the argument order is too easy
+        // } => ssh_into(&mut conn, new, name, host, user, settings),
         Commands::Move { name } => mover::move_to(&mut conn, name),
-        Commands::Run { name, command } => run_command(&mut conn, name, command),
+        // Commands::Run { name, command } => run_command(&mut conn, name, command),
         Commands::Add { add_type } => match &add_type {
             TypeOfAdds::L { language_name } => {
                 let lg = create_language(&mut conn, language_name);
@@ -154,6 +155,7 @@ fn parse() {
                 );
             }
         }
+        _ => println!("Unsupported command..."),
     }
 
     //  let dt_end = chrono::Utc::now();
