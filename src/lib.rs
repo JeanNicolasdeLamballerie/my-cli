@@ -1,7 +1,10 @@
+pub mod config;
 pub mod database;
 pub mod logger;
 pub mod models;
 pub mod mover;
 pub mod run;
-pub mod ssh;
 pub mod schema;
+pub mod ssh;
+pub mod auth;
+pub mod todos;

@@ -1,13 +1,13 @@
 use clap::{Parser, Subcommand};
-use my_cli::database::run_migration;
-use my_cli::ssh::ssh_into;
+use my_cli::database::{run_migration, CryptoFilterType};
+// use my_cli::ssh::ssh_into;
+use my_cli::auth;
 use my_cli::{
     database::{
         create_language, create_project, establish_connection, fetch_languages, fetch_projects,
     },
     logger::{self, print},
     mover,
-    run::run_command,
 };
 use resolve_path::PathResolveExt;
 use std::time::SystemTime;
@@ -46,6 +46,15 @@ enum Commands {
         user: Option<String>,
         host: Option<String>,
     },
+    Retrieve {
+        #[arg(long)]
+        host: String,
+    },
+    /// Store a key-value. Requires master password.
+    Store {
+        #[arg(long)]
+        host: String,
+    },
     /// Move to specific project
     Move {
         name: Option<String>,
@@ -66,7 +75,7 @@ enum Commands {
     },
     /// Show languages & projects
     Show {
-        language: String,
+        searchterm: String,
         ///Indicate whether you wanna show languages or projects.
         #[arg(short, long, default_value_t = false)]
         lang_query: bool,
@@ -96,6 +105,20 @@ fn parse() {
     let mut conn = establish_connection();
     run_migration(&mut conn);
     match &cli.command {
+        Commands::Retrieve { host } => {
+            let key = auth::manager::requires_password(&mut conn);
+            let cleartext =
+                auth::manager::retrieve_encrypted(&key, CryptoFilterType::Host(host.to_owned()));
+            auth::manager::show_password(&cleartext).unwrap();
+        }
+        Commands::Store { host } => {
+            println!("our host : {host}");
+            let key = auth::manager::requires_password(&mut conn);
+            let data = auth::manager::hidden_user_input(0);
+            auth::manager::store_encrypted(&data, host, &key);
+            let _cleartext =
+                auth::manager::retrieve_encrypted(&key, CryptoFilterType::Host(host.to_owned()));
+        }
         // Commands::Ssh {
         //     new,
         //     name,
@@ -130,11 +153,11 @@ fn parse() {
             }
         },
         Commands::Show {
-            language,
+            searchterm,
             lang_query,
         } => {
             if *lang_query {
-                let languages = fetch_languages(&mut conn, language);
+                let languages = fetch_languages(&mut conn, searchterm);
                 let length = languages.len();
                 let mut table = Table::new(languages);
                 print(
@@ -144,7 +167,7 @@ fn parse() {
                     )),
                 );
             } else {
-                let projects = fetch_projects(&mut conn, language);
+                let projects = fetch_projects(&mut conn, searchterm);
                 let length = projects.len();
                 let mut table = Table::new(projects);
                 print(

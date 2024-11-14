@@ -14,6 +14,49 @@ pub struct NewLanguage<'a> {
     pub name: &'a str,
 }
 
+#[derive(Queryable, Selectable, Identifiable, PartialEq, Debug, Clone, Tabled)]
+#[diesel(table_name = crate::schema::master_user)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct MasterUser {
+    pub id: i32,
+    pub hash: String,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::master_user)]
+pub struct NewMasterUser<'a> {
+    pub hash: &'a str,
+}
+
+#[derive(Queryable, Selectable, Identifiable, Associations, PartialEq, Debug, Clone, Tabled)]
+#[diesel(table_name = crate::schema::projects_crypto_password)]
+#[diesel(belongs_to(Project))]
+#[diesel(belongs_to(CryptoData))]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct ProjectsCryptoData {
+    pub id: i32,
+    pub crypto_data_id: i32,
+    pub project_id: i32,
+}
+
+
+#[derive(Queryable, Selectable, Identifiable, PartialEq, Debug, Clone, Tabled)]
+#[diesel(table_name = crate::schema::crypto_data)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct CryptoData {
+    pub id: i32,
+    pub encrypted: String,
+    pub host: String,
+    pub nonce: String,
+}
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::crypto_data)]
+pub struct NewCryptoData<'a> {
+    pub encrypted: &'a str,
+    pub host : &'a str,
+    pub nonce: &'a str,
+}
+ 
 #[derive(Queryable, Selectable, Identifiable, Associations, PartialEq, Debug, Clone, Tabled)]
 #[diesel(table_name = crate::schema::projects)]
 #[diesel(belongs_to(Language))]
@@ -32,6 +75,67 @@ pub struct NewProject<'a> {
     pub path: &'a str,
     pub language_id: &'a i32,
 }
+
+#[derive(Queryable, Selectable, Identifiable, PartialEq, Debug, Clone, Tabled)]
+#[diesel(belongs_to(Project))]
+#[diesel(table_name = crate::schema::todos)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct Todo {
+    pub id: i32,
+    pub title: String,
+    pub subtitle: String,
+    pub content: String,
+    pub project_id : i32,
+}
+// TODO : add tags
+// pub struct TodoTag {
+//     //todo
+// }
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::todos)]
+pub struct NewTodo<'a> {
+    pub title: &'a str,
+    pub subtitle: &'a str,
+    pub content: &'a str,
+    pub project_id: &'a i32,
+}
+
+#[derive(Queryable, Selectable, Identifiable, PartialEq, Debug, Clone, Tabled)]
+#[diesel(table_name = crate::schema::tags)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct Tag {
+    pub id: i32,
+    pub name: String,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::tags)]
+pub struct NewTag<'a> {
+    pub name: &'a str,
+}
+
+
+#[derive(Queryable, Selectable, Identifiable, PartialEq, Debug, Clone, Tabled)]
+#[diesel(belongs_to(Tag))]
+#[diesel(belongs_to(Todo))]
+#[diesel(table_name = crate::schema::todo_tags)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct TodoTag {
+    pub id: i32,
+    pub tag_id:i32,
+    pub todo_id:i32,
+}
+
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::todo_tags)]
+pub struct NewTodoTag<'a> {
+    pub tag_id: &'a i32,
+    pub todo_id:&'a i32,
+}
+
+
 
 #[derive(Queryable, Selectable, Identifiable, PartialEq, Debug, Clone, Tabled)]
 #[diesel(table_name = crate::schema::ssh)]

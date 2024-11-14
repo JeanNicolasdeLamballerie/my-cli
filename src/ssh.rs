@@ -1,6 +1,5 @@
 use std::{
-    io::{self, BufRead, BufReader, BufWriter, Read, Write},
-    os::windows::prelude::AsHandle,
+    io::{BufRead, BufReader, Write},
     process::{Command, Stdio},
     thread::park_timeout,
     time::Duration,
@@ -9,9 +8,8 @@ use std::{
 use diesel::SqliteConnection;
 
 use crate::{
-    database::{create_ssh, fetch_single_project, get_ssh},
+    database::{create_ssh, get_ssh},
     logger::{print, TablingOptionsBuilder},
-    models::SSHProjects,
 };
 
 pub fn ssh_into(
@@ -60,7 +58,7 @@ pub fn ssh_into(
         .unwrap();
     //  println!("wrote password");
     if let Some(ref mut stdout) = handle.stdout {
-        for line in BufReader::new(stdout).lines() {}
+        for _line in BufReader::new(stdout).lines() {}
         handle.wait().unwrap();
     }
     // let out = handle.stdout.unwrap();

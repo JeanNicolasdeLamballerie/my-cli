@@ -26,10 +26,59 @@ pub fn establish_connection() -> SqliteConnection {
 }
 
 use crate::models::{
-    Language, NewLanguage, NewProjectSsh, NewStoredSsh, ProjectWithLanguageName, SSHProjects, Ssh,
+    CryptoData, Language, MasterUser, NewCryptoData, NewLanguage, NewMasterUser, NewStoredSsh, ProjectWithLanguageName,  Ssh
 };
 
-use crate::schema::{languages, ssh, ssh_projects};
+use crate::schema::{crypto_data, languages, master_user, ssh, ssh_projects};
+
+
+pub enum CryptoFilterType {
+    Host(String),
+    Id(i32),
+    All,
+}
+
+pub fn fetch_crypto(conn : &mut SqliteConnection, filter : CryptoFilterType) -> Vec<CryptoData> {
+
+    match filter {
+       CryptoFilterType::All => crypto_data::table.select(crypto_data::all_columns).load(conn).expect("error fetching the cryptos"),
+       CryptoFilterType::Host(host) => crypto_data::table.select(crypto_data::all_columns).filter(crypto_data::dsl::host.like(format!("{host}%"))).load(conn).expect("error fetching the crypto host"),
+       CryptoFilterType::Id(id) => crypto_data::table.select(crypto_data::all_columns).filter(crypto_data::dsl::id.eq(id)).load(conn).expect("error fetching the crypto id"),
+    }
+}
+pub fn create_crypto(conn : &mut SqliteConnection, encrypted:&str, nonce:&str, host: &str) -> CryptoData {
+    let new_crypto_data = NewCryptoData {encrypted, nonce, host};
+    diesel::insert_into(crypto_data::table)
+        .values(&new_crypto_data)
+        .returning(CryptoData::as_returning())
+        .get_result(conn)
+        .expect("Error saving new encrypted data...")
+}
+
+pub fn fetch_master_user( conn: &mut SqliteConnection) -> Option<MasterUser> {
+    
+   let u: Vec<MasterUser> =master_user::table.select(master_user::all_columns).load(conn).expect("Error requesting master user (db issue)");
+    if u.len() > 1 {
+        panic!("Your db is compromised. There is more than one super user.");
+    }
+    if u.len() < 1 {
+    return None;
+    }
+    Some(u[0].clone())
+}
+
+
+
+pub fn create_master_user(conn: &mut SqliteConnection, hash: &str) -> MasterUser {
+    let new_master_user = NewMasterUser { hash };
+
+    diesel::insert_into(master_user::table)
+        .values(&new_master_user)
+        .returning(MasterUser::as_returning())
+        .get_result(conn)
+        .expect("Error saving new master user")
+}
+
 pub fn create_language(conn: &mut SqliteConnection, name: &str) -> Language {
     let new_language = NewLanguage { name };
 
@@ -40,8 +89,8 @@ pub fn create_language(conn: &mut SqliteConnection, name: &str) -> Language {
         .expect("Error saving new post")
 }
 //todo add by name
-pub fn fetch_projects(conn: &mut SqliteConnection, language: &str) -> Vec<ProjectWithLanguageName> {
-    match language {
+pub fn fetch_projects(conn: &mut SqliteConnection, searchterm: &str) -> Vec<ProjectWithLanguageName> {
+    match searchterm {
         "all" | "a" => {
             let projects_as_vec: Vec<(Project, String)> = projects::table
                 .inner_join(languages::table)
@@ -54,12 +103,12 @@ pub fn fetch_projects(conn: &mut SqliteConnection, language: &str) -> Vec<Projec
                 .collect()
         }
         _ => {
-            let l = get_language_by_name(conn, language);
+            // let l = get_language_by_name(conn, searchterm);
 
             let projects_as_vec: Vec<(Project, String)> = projects::table
                 .inner_join(languages::table)
                 .select((projects::all_columns, languages::name))
-                .filter(projects::dsl::language_id.eq(l.id))
+                .filter(projects::dsl::name.like(format!("%{searchterm}%")))
                 .load(conn)
                 .expect("error handling project");
 
@@ -107,7 +156,7 @@ pub fn fetch_languages(conn: &mut SqliteConnection, language: &str) -> Vec<Langu
 
         _ => {
             return languages::table
-                .filter(languages::dsl::name.eq(language))
+                .filter(languages::dsl::name.like(format!("%{language}%")))
                 .select(Language::as_select())
                 .load(conn)
                 .expect("error handling language");
@@ -206,4 +255,4 @@ pub fn get_ssh_by_project(conn: &mut SqliteConnection, project_name: &str) -> Ve
         .unwrap()
 }
 
-pub fn run_script(conn: &mut SqliteConnection, name: Option<&str>) {}
+pub fn get_script(_conn: &mut SqliteConnection, _name: Option<&str>) {}
