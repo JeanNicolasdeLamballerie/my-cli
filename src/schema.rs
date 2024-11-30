@@ -83,20 +83,20 @@ diesel::table! {
 }
 
 diesel::table! {
-    todo_tags (id) {
+    todos (id) {
         id -> Integer,
-        todo_id -> Integer,
-        tag_id -> Integer,
+        title -> Text,
+        subtitle -> Nullable<Text>,
+        content -> Nullable<Text>,
+        project_id -> Integer,
     }
 }
 
 diesel::table! {
-    todos (id) {
+    todos_tags (id) {
         id -> Integer,
-        title -> Text,
-        subtitle -> Text,
-        content -> Text,
-        project_id -> Integer,
+        todo_id -> Integer,
+        tag_id -> Integer,
     }
 }
 
@@ -108,9 +108,9 @@ diesel::joinable!(scripts_lang_defaults -> languages (language_id));
 diesel::joinable!(scripts_lang_defaults -> scripts (script_id));
 diesel::joinable!(ssh_projects -> projects (project_id));
 diesel::joinable!(ssh_projects -> ssh (ssh_id));
-diesel::joinable!(todo_tags -> tags (tag_id));
-diesel::joinable!(todo_tags -> todos (todo_id));
 diesel::joinable!(todos -> projects (project_id));
+diesel::joinable!(todos_tags -> tags (tag_id));
+diesel::joinable!(todos_tags -> todos (todo_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     crypto_data,
@@ -123,6 +123,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     ssh,
     ssh_projects,
     tags,
-    todo_tags,
     todos,
+    todos_tags,
 );

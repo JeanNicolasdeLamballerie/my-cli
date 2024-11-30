@@ -19,8 +19,7 @@ const NL: &str = "\n";
 #[cfg(target_os = "windows")]
 const NL: &str = "\r\n";
 
-
-pub fn show_password(pw:&str) -> eframe::Result {
+pub fn show_password(pw: &str) -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([320.0, 240.0]),
         ..Default::default()
@@ -39,40 +38,36 @@ pub fn show_password(pw:&str) -> eframe::Result {
 }
 #[derive(Default)]
 struct MyEguiApp {
-    pw:String,
-    pw_string:String,
+    pw: String,
+    pw_string: String,
 }
 
 impl MyEguiApp {
-    fn new(_cc: &eframe::CreationContext<'_>, pw:String) -> Self {
+    fn new(_cc: &eframe::CreationContext<'_>, pw: String) -> Self {
         // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
-             let mut pw_string = String::new();
-            for _ in 0..pw.len(){
-                pw_string.push('*');
-            }
-        Self{
-            pw,
-            pw_string
+        let mut pw_string = String::new();
+        for _ in 0..pw.len() {
+            pw_string.push('*');
         }
+        Self { pw, pw_string }
     }
 }
 impl eframe::App for MyEguiApp {
-   fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-       egui::CentralPanel::default().show(ctx, |ui| {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Hello World!");
             ui.label("Password");
             if ui.button("Show").clicked() {
                 self.pw_string = self.pw.to_string();
-            };  
+            };
 
-             ui.label(&self.pw_string);
-   });
+            ui.label(&self.pw_string);
+        });
+    }
 }
-}
-
 
 pub fn requires_password(conn: &mut SqliteConnection) -> [u8; 32] {
     let password = rpassword::prompt_password("Your password: ").unwrap();

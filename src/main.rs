@@ -2,6 +2,8 @@ use clap::{Parser, Subcommand};
 use my_cli::database::{run_migration, CryptoFilterType};
 // use my_cli::ssh::ssh_into;
 use my_cli::auth;
+use my_cli::editor::{TodoEditor, WindowUI};
+use my_cli::todos::TodoList;
 use my_cli::{
     database::{
         create_language, create_project, establish_connection, fetch_languages, fetch_projects,
@@ -191,7 +193,26 @@ fn parse() {
 }
 
 fn main() {
-    parse();
+    view();
+    // parse();
+}
+
+fn view() {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default(), //.with_inner_size([320.0, 240.0])
+        ..Default::default()
+    };
+    eframe::run_native(
+        "Your Todos",
+        options,
+        Box::new(|_cc| {
+            // This gives us image support:
+            // egui_extras::install_image_loaders(&cc.egui_ctx);
+
+            Ok(Box::new(TodoList::default()))
+        }),
+    )
+    .unwrap();
 }
 
 // struct Foo {
