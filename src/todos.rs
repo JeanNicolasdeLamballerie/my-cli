@@ -3,7 +3,7 @@
 use egui::{Align, Color32, Pos2, RichText, ScrollArea};
 
 use crate::{
-    database::{self, get_todos_for_proj, Save},
+    database::{self, delete_all_todos, delete_todo, get_todos_for_proj, Save},
     editor::{Modified, TodoEditor},
     models::{FormattedTodo, NewTodo, Project, ProjectWithLanguageName, UpdateTodo},
     ui::{DatabaseError, Log, Success},
@@ -223,6 +223,17 @@ impl eframe::App for TodoList {
                                         self.log.should_scroll();
                                         self.refresh = true;
                                     }
+                                    if ui.button("Delete all").clicked() {
+                                        delete_all_todos(&self.parent.id);
+                                        // FIXME make this have a confirmation screen.
+                                        let r = Ok(Success::new(
+                                            format!("Deleted all todos for this project.",),
+                                            crate::ui::SuccessType::Database,
+                                        ));
+                                        self.log.push(r);
+                                        self.log.should_scroll();
+                                        self.refresh = true;
+                                    }
                                 }
 
                                 _ => {
@@ -353,6 +364,22 @@ impl crate::ui::View for TodoList {
                         self.refresh = true;
                         //TODO save to db ?
                     }
+                    if ui.button("Delete").clicked() {
+                        match element.id {
+                            TodoId::New(_) => todo!(),
+                            TodoId::Stored(id) => {
+                                delete_todo(&id);
+                                self.log.push(Ok(Success::new(
+                                    format!(
+                                        "Deleted Todo ({}, titled {} ) successfully.",
+                                        id, element.title
+                                    ),
+                                    crate::ui::SuccessType::Database,
+                                )));
+                                self.refresh = true;
+                            }
+                        }
+                    }
                 });
         }
     }
@@ -383,9 +410,7 @@ impl crate::database::Save<Vec<FormattedTodo>> for TodoList {
             }
         }
         let rows = database::batch_create_todo(&insert);
-        println!("Added {} new todos.", rows);
         let rows_update = database::batch_edit_todo(edit);
-        println!("Edited {} todos.", rows_update);
         Ok(Success::new(
             format!(
                 "Added {} todos and edited {} todos successfully.",

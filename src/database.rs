@@ -306,6 +306,16 @@ pub fn create_todo(todo: NewTodo) -> Todo {
     todo
 }
 
+pub fn delete_all_todos(project_id: &i32) {
+    let mut conn = establish_connection();
+    diesel::delete(todos::table.filter(todos::project_id.eq(project_id)))
+        .execute(&mut conn)
+        .expect(&format!(
+            "Error deleting todos related to project {}",
+            project_id
+        ));
+}
+
 /// Deletes a single todo for a given Todo ID.
 pub fn delete_todo(id: &i32) {
     let mut conn = establish_connection();
