@@ -113,6 +113,7 @@ pub fn fetch_projects(
     searchterm: &str,
 ) -> Vec<ProjectWithLanguageName> {
     match searchterm {
+        // "todo" | "todos" => {}
         "all" | "a" => {
             let projects_as_vec: Vec<(Project, String)> = projects::table
                 .inner_join(languages::table)
@@ -124,13 +125,13 @@ pub fn fetch_projects(
                 .map(|value| ProjectWithLanguageName::new(value.clone()))
                 .collect()
         }
-        _ => {
+        term => {
             // let l = get_language_by_name(conn, searchterm);
 
             let projects_as_vec: Vec<(Project, String)> = projects::table
                 .inner_join(languages::table)
                 .select((projects::all_columns, languages::name))
-                .filter(projects::dsl::name.like(format!("%{searchterm}%")))
+                .filter(projects::dsl::name.like(format!("%{term}%")))
                 .load(conn)
                 .expect("error handling project");
 
@@ -140,6 +141,18 @@ pub fn fetch_projects(
                 .collect()
         }
     }
+}
+pub fn all_projects() -> Vec<ProjectWithLanguageName> {
+    let conn = &mut establish_connection();
+    projects::table
+        .inner_join(languages::table)
+        .select((projects::all_columns, languages::name))
+        .load(conn)
+        .expect("error handling project")
+        .iter()
+        .map(|value: &(Project, String)| ProjectWithLanguageName::new(value.clone()))
+        .collect()
+    // s
 }
 pub fn fetch_single_project(conn: &mut SqliteConnection, name: &str) -> ProjectWithLanguageName {
     let projects_as_vec: Vec<(Project, String)> = projects::table
@@ -267,23 +280,26 @@ pub fn batch_edit_todo(todo_list: Vec<UpdateTodo>) -> usize {
     //     .execute(&mut conn)
     //     .expect("error saving todo")
 }
-
+pub fn update_todo(todo: UpdateTodo) -> usize {
+    // crate::schema::todos::table.filter
+    let mut conn = establish_connection();
+    diesel::update(todos::table.filter(todos::id.eq(todo.id)))
+        .set((
+            todos::subtitle.eq(todo.subtitle),
+            todos::content.eq(todo.content),
+            todos::title.eq(todo.title),
+        ))
+        .execute(&mut conn)
+        .expect("error updating todo")
+}
+// diesel::insert_into(todos::table)
+//     .values(&todos)
+//     .execute(&mut conn)
 /// Inserts a single todo; returns it with it's Id.
-pub fn create_todo(
-    title: &str,
-    subtitle: Option<&str>,
-    content: Option<&str>,
-    project_id: &i32,
-) -> Todo {
-    let new_todo = NewTodo {
-        title,
-        subtitle,
-        content,
-        project_id,
-    };
+pub fn create_todo(todo: NewTodo) -> Todo {
     let mut conn = establish_connection();
     let todo = diesel::insert_into(todos::table)
-        .values(&new_todo)
+        .values(&todo)
         .returning(Todo::as_returning())
         .get_result(&mut conn)
         .expect("error saving todo");
@@ -309,15 +325,13 @@ pub fn get_todo_id(id: i32) -> Todo {
         .expect("No Todo found with corresponding id")
 }
 
-pub fn get_todos_for_proj(project_id: i32) -> Todo {
+pub fn get_todos_for_proj(project_id: i32) -> Vec<Todo> {
     let mut conn = establish_connection();
     todos::table
         .filter(todos::dsl::project_id.eq(project_id))
         .select(Todo::as_select())
         .load(&mut conn)
-        .expect("error handling ssh")
-        .pop()
-        .expect("No Todo found with corresponding id")
+        .expect("No Todos found...")
 }
 
 // TODO add a "hook" to hook a ssh to a project

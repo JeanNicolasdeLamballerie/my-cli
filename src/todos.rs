@@ -1,14 +1,12 @@
 //
 
-use egui::{Color32, Pos2, RichText, ScrollArea, SidePanel, Ui};
-use tabled::settings::panel::VerticalPanel;
+use egui::{Align, Color32, Pos2, RichText, ScrollArea};
 
 use crate::{
-    database::{self, Save},
-    editor::{Modified, TodoEditor, WindowUI},
+    database::{self, get_todos_for_proj, Save},
+    editor::{Modified, TodoEditor},
     models::{FormattedTodo, NewTodo, Project, ProjectWithLanguageName, UpdateTodo},
-    schema::todos::subtitle,
-    ui::{DatabaseError, Feedback, Log, Success},
+    ui::{DatabaseError, Log, Success},
 };
 
 impl From<TodoEditor> for FormattedTodo {
@@ -43,36 +41,23 @@ impl From<&mut TodoEditor> for FormattedTodo {
         }
     }
 }
-// impl TryFrom<FormattedTodo> for NewTodo<'_> {
-//     type Error = ();
-
-//     fn try_from(value: FormattedTodo) -> Result<Self, Self::Error> {
-//         Ok(Self {
-//             title: &value.title,
-//             subtitle: Some(&value.subtitle),
-//             content: Some(&value.content),
-//             project_id: &value.project_id,
-//         })
+// impl Into<TodoEditor> for FormattedTodo {
+//     fn into(self) -> TodoEditor {
+//         let id = if self.new {
+//             TodoId::New(self.id)
+//         } else {
+//             TodoId::Stored(self.id)
+//         };
+//         TodoEditor::new(
+//             "md",
+//             &self.title,
+//             &self.subtitle,
+//             &self.content,
+//             id,
+//             self.project_id,
+//         )
 //     }
 // }
-
-impl Into<TodoEditor> for FormattedTodo {
-    fn into(self) -> TodoEditor {
-        let id = if self.new {
-            TodoId::New(self.id)
-        } else {
-            TodoId::Stored(self.id)
-        };
-        TodoEditor::new(
-            "md",
-            &self.title,
-            &self.subtitle,
-            &self.content,
-            id,
-            self.project_id,
-        )
-    }
-}
 #[derive(Clone, Debug)]
 pub enum TodoId {
     New(i32),
@@ -83,33 +68,6 @@ pub enum TodoId {
 pub struct Tag {
     //todo
 }
-
-// pub struct Todo {
-
-// }
-
-// impl Todo {
-//     pub fn new(title: String, subtitle: String, content: String) {
-//         return Self {
-//             title,
-//             subtitle,
-//             content,
-//             tags:None,
-//         };
-//     }
-// }
-// pub trait View {
-//     fn ui(&mut self, ui: &mut egui::Ui);
-// }
-
-// /// Something to view
-// pub trait WindowUI {
-//     /// `&'static` so we can also use it as a key to store open/close state.
-//     fn name(&self) -> &str;
-
-//     /// Show windows, etc
-//     fn show(&mut self, ctx: &egui::Context, open: &mut bool);
-// }
 #[derive(Debug)]
 pub enum TodoListState {
     VIEW,
@@ -123,6 +81,7 @@ pub struct TodoList {
     state: TodoListState,
     target: Option<TodoEditor>,
     log: Log<Result<Success, DatabaseError>>,
+    refresh: bool,
 }
 
 impl Default for TodoList {
@@ -137,6 +96,7 @@ impl Default for TodoList {
             "Some Language".into(),
         ));
         Self {
+            refresh: false,
             parent,
             todos: Vec::from([
                 // TodoEditor::default(),
@@ -157,59 +117,59 @@ impl Default for TodoList {
             target: None,
             log: Log::new(Vec::from([
                 Ok(Success::new(
-                    "success !".into(),
+                    "Connected to database.".into(),
                     crate::ui::SuccessType::Database,
                 )),
-                Ok(Success::new(
-                    "success !".into(),
-                    crate::ui::SuccessType::Database,
-                )),
-                Ok(Success::new(
-                    "success with a very long string should look like this ?sdifjizejij hello !"
-                        .into(),
-                    crate::ui::SuccessType::Database,
-                )),
-                Err(DatabaseError::new("Error occured x y z")),
-                Ok(Success::new(
-                    "success !".into(),
-                    crate::ui::SuccessType::Database,
-                )),
-                Ok(Success::new(
-                    "success !".into(),
-                    crate::ui::SuccessType::Database,
-                )),
-                Ok(Success::new(
-                    "success !".into(),
-                    crate::ui::SuccessType::Database,
-                )),
-                Ok(Success::new(
-                    "success !".into(),
-                    crate::ui::SuccessType::Database,
-                )),
-                Ok(Success::new(
-                    "success !".into(),
-                    crate::ui::SuccessType::Database,
-                )),
-                Ok(Success::new(
-                    "success !".into(),
-                    crate::ui::SuccessType::Database,
-                )),
-                Ok(Success::new(
-                    "success !".into(),
-                    crate::ui::SuccessType::Database,
-                )),
-                Ok(Success::new(
-                    "success !".into(),
-                    crate::ui::SuccessType::Database,
-                )),
-                Ok(Success::new(
-                    "success !".into(),
-                    crate::ui::SuccessType::Database,
-                )),
-                Ok(Success::new(
-                    "success 2 !".into(),
-                    crate::ui::SuccessType::Database,
-                )),
+                // Ok(Success::new(
+                //     "success !".into(),
+                //     crate::ui::SuccessType::Database,
+                // )),
+                // Ok(Success::new(
+                //     "success with a very long string should look like this ?sdifjizejij hello !"
+                //         .into(),
+                //     crate::ui::SuccessType::Database,
+                // )),
+                // Err(DatabaseError::new("Error occured x y z")),
+                // Ok(Success::new(
+                //     "success !".into(),
+                //     crate::ui::SuccessType::Database,
+                // )),
+                // Ok(Success::new(
+                //     "success !".into(),
+                //     crate::ui::SuccessType::Database,
+                // )),
+                // Ok(Success::new(
+                //     "success !".into(),
+                //     crate::ui::SuccessType::Database,
+                // )),
+                // Ok(Success::new(
+                //     "success !".into(),
+                //     crate::ui::SuccessType::Database,
+                // )),
+                // Ok(Success::new(
+                //     "success !".into(),
+                //     crate::ui::SuccessType::Database,
+                // )),
+                // Ok(Success::new(
+                //     "success !".into(),
+                //     crate::ui::SuccessType::Database,
+                // )),
+                // Ok(Success::new(
+                //     "success !".into(),
+                //     crate::ui::SuccessType::Database,
+                // )),
+                // Ok(Success::new(
+                //     "success !".into(),
+                //     crate::ui::SuccessType::Database,
+                // )),
+                // Ok(Success::new(
+                //     "success !".into(),
+                //     crate::ui::SuccessType::Database,
+                // )),
+                // Ok(Success::new(
+                //     "success 2 !".into(),
+                //     crate::ui::SuccessType::Database,
+                // )),
             ])),
         }
     }
@@ -217,7 +177,7 @@ impl Default for TodoList {
 
 impl eframe::App for TodoList {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        use crate::editor::View as _;
+        use crate::ui::View as _;
 
         // let size = ctx.available_rect();
 
@@ -258,7 +218,10 @@ impl eframe::App for TodoList {
                                         ))
                                     }
                                     if ui.button("Save all").clicked() {
-                                        self.save_to_db().unwrap();
+                                        let r = self.save_to_db();
+                                        self.log.push(r);
+                                        self.log.should_scroll();
+                                        self.refresh = true;
                                     }
                                 }
 
@@ -273,7 +236,7 @@ impl eframe::App for TodoList {
                     // ui.add(egui::Separator::default());
                     ui.separator();
                     ScrollArea::vertical().show(ui, |ui| {
-                        self.log.process(ui);
+                        self.log.ui(ui);
                     });
                 });
             });
@@ -318,10 +281,30 @@ impl TodoList {
         let mut cache = egui_commonmark::CommonMarkCache::default();
         egui_commonmark::CommonMarkViewer::new().show(ui, &mut cache, &display);
     }
+    pub fn add(&mut self, todo: TodoEditor) {
+        self.todos.push(todo);
+    }
+    pub fn retrieve(&mut self) {
+        let todos = get_todos_for_proj(self.parent.id);
+
+        // FIXME Might need to instead merge the two vecs with rules on how to handle.
+        // lets just replace it for now.
+        self.todos = todos.into_iter().map(|todo| todo.into()).collect();
+    }
+
+    pub fn with_parent(&mut self, parent: &ProjectWithLanguageName) -> &mut Self {
+        self.parent = parent.clone();
+        self
+    }
 }
 
-impl crate::editor::View for TodoList {
+impl crate::ui::View for TodoList {
     fn ui(&mut self, ui: &mut egui::Ui) {
+        use crate::ui::WindowUI as _;
+        if self.refresh {
+            self.refresh = false;
+            self.retrieve();
+        }
         let used_rectangle = ui.ctx().available_rect();
         let x_delta = 100f32; //px
         let y_delta = 150f32;
@@ -343,7 +326,6 @@ impl crate::editor::View for TodoList {
             };
 
             element.modified = element.is_modified();
-            println!("Name / GID : {} for {}", element.name(), element.gid);
             egui::Window::new(element.name())
                 .id(egui::Id::new(&element.gid))
                 //TODO check for closing
@@ -364,12 +346,18 @@ impl crate::editor::View for TodoList {
                         .add_enabled(element.modified, egui::Button::new("Save"))
                         .clicked()
                     {
+                        let r = element.save_to_db();
+                        self.log.push(r);
+
+                        self.log.should_scroll();
+                        self.refresh = true;
                         //TODO save to db ?
                     }
                 });
         }
     }
 }
+
 //TODO error handling
 impl crate::database::Save<Vec<FormattedTodo>> for TodoList {
     fn save_to_db(&mut self) -> Result<Success, DatabaseError> {

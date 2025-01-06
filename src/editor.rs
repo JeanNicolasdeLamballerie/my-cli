@@ -18,7 +18,8 @@
 // use crate::models::FormattedTodo;
 
 use crate::{
-    models::FormattedTodo,
+    database::{self, Save},
+    models::{FormattedTodo, NewTodo, UpdateTodo},
     todos::TodoId,
     ui::{DatabaseError, Success},
 };
@@ -147,7 +148,7 @@ impl TodoEditor {
         }
     }
     pub fn title_str(&self) -> String {
-        String::from(format!("# {}\n\n ## {}", self.title, self.subtitle))
+        String::from(format!("# {}\n\n## {}", self.title, self.subtitle))
     }
 }
 
@@ -185,41 +186,56 @@ impl TodoEditor {
 
 impl crate::database::Save<FormattedTodo> for TodoEditor {
     fn save_to_db(&mut self) -> Result<Success, DatabaseError> {
-        todo!();
-        // Ok(Success::new(message, success_type))
+        let todo = self.to_saved_format();
+        let result = if todo.new {
+            database::create_todo(NewTodo {
+                project_id: &todo.project_id,
+                title: &todo.title,
+                subtitle: Some(&todo.subtitle),
+                content: Some(&todo.content),
+            });
+            Success::new(
+                format!("Successfully created todo {}.", todo.title),
+                crate::ui::SuccessType::Database,
+            )
+        } else {
+            database::update_todo(UpdateTodo {
+                id: &todo.id,
+                project_id: &todo.project_id,
+                title: &todo.title,
+                subtitle: Some(&todo.subtitle),
+                content: Some(&todo.content),
+            });
+            Success::new(
+                format!(
+                    "Successfully updated todo ({}, id {}) successfully.",
+                    todo.title, todo.id
+                ),
+                crate::ui::SuccessType::Database,
+            )
+        };
+
+        Ok(result)
     }
+
     fn to_saved_format(&mut self) -> FormattedTodo {
         self.into()
     }
 }
-
-pub trait View {
-    fn ui(&mut self, ui: &mut egui::Ui);
-}
-
-/// Something to view
-pub trait WindowUI {
-    // `&'static` so we can also use it as a key to store open/close state.
-    fn name(&self) -> &str;
-
-    /// Show windows, etc
-    fn show(&mut self, ctx: &egui::Context, open: &mut bool);
-}
-
-impl WindowUI for TodoEditor {
+impl crate::ui::WindowUI for TodoEditor {
     fn name(&self) -> &str {
         &self.name
     }
 
     fn show(&mut self, ctx: &egui::Context, open: &mut bool) {
-        use View as _;
+        use crate::ui::View as _;
         egui::Window::new(self.name())
             .open(open)
             .default_height(500.0)
             .show(ctx, |ui| self.ui(ui));
     }
 }
-impl View for TodoEditor {
+impl crate::ui::View for TodoEditor {
     fn ui(&mut self, ui: &mut egui::Ui) {
         let Self {
             language,
@@ -289,3 +305,49 @@ impl View for TodoEditor {
         });
     }
 }
+impl From<crate::models::Todo> for TodoEditor {
+    fn from(value: crate::models::Todo) -> Self {
+        Self::new(
+            "md",
+            &value.title,
+            &value.subtitle.unwrap_or("".into()),
+            &value.content.unwrap_or("".into()),
+            TodoId::Stored(value.id),
+            value.project_id,
+        )
+    }
+}
+impl From<FormattedTodo> for TodoEditor {
+    fn from(value: FormattedTodo) -> Self {
+        let id = if value.new {
+            TodoId::New(value.id)
+        } else {
+            TodoId::Stored(value.id)
+        };
+        Self::new(
+            "md",
+            &value.title,
+            &value.subtitle,
+            &value.content,
+            id,
+            value.project_id,
+        )
+    }
+}
+// impl Into<TodoEditor> for FormattedTodo {
+//     fn into(self) -> TodoEditor {
+//         let id = if self.new {
+//             TodoId::New(self.id)
+//         } else {
+//             TodoId::Stored(self.id)
+//         };
+//         TodoEditor::new(
+//             "md",
+//             &self.title,
+//             &self.subtitle,
+//             &self.content,
+//             id,
+//             self.project_id,
+//         )
+//     }
+// }
