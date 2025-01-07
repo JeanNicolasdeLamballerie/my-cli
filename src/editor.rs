@@ -150,6 +150,9 @@ impl TodoEditor {
     pub fn title_str(&self) -> String {
         String::from(format!("# {}\n\n## {}", self.title, self.subtitle))
     }
+    pub fn to_display(&self) -> String {
+        format!("{}\n\n{}", self.title_str(), self.code)
+    }
 }
 
 // impl Into<FormattedTodo> for TodoEditor {
@@ -297,7 +300,7 @@ impl crate::ui::View for TodoEditor {
                 egui::TextEdit::multiline(code)
                     .font(egui::TextStyle::Monospace) // for cursor height
                     .code_editor()
-                    .desired_rows(15)
+                    .desired_rows(13)
                     .lock_focus(true)
                     .desired_width(f32::INFINITY)
                     .layouter(&mut layouter),
@@ -305,6 +308,7 @@ impl crate::ui::View for TodoEditor {
         });
     }
 }
+
 impl From<crate::models::Todo> for TodoEditor {
     fn from(value: crate::models::Todo) -> Self {
         Self::new(

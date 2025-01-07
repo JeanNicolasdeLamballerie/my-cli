@@ -7,6 +7,7 @@ pub trait Feedback<T> {
     fn process(&mut self, ui: &mut egui::Ui) -> ();
 }
 
+#[derive(Clone)]
 /// Struct holding the error (or success) values to display. Calling `.process`
 /// will show them on the screen.
 pub struct Log<T>
@@ -44,7 +45,7 @@ where
 //TODO can be refactored in a more general to-display error
 //
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DatabaseError {
     message: String,
 }
@@ -56,11 +57,13 @@ impl DatabaseError {
     }
 }
 
+#[derive(Clone)]
 pub enum SuccessType {
     Database,
     File,
 }
 
+#[derive(Clone)]
 pub struct Success {
     timestamp: SystemTime,
     success_type: SuccessType,

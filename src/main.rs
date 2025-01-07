@@ -21,6 +21,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tabled::Table;
+
+#[cfg(target_os = "windows")]
+pub const NL: &str = "\r\n";
+
+#[cfg(not(target_os = "windows"))]
+pub const NL: &str = "\n";
+
 /// 󰉊 Blazing fast project manager CLI 󰉊
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

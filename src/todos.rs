@@ -1,5 +1,7 @@
 //
 
+use std::io::Write;
+
 use egui::{Align, Color32, Pos2, RichText, ScrollArea, TextStyle};
 
 use crate::{
@@ -41,23 +43,7 @@ impl From<&mut TodoEditor> for FormattedTodo {
         }
     }
 }
-// impl Into<TodoEditor> for FormattedTodo {
-//     fn into(self) -> TodoEditor {
-//         let id = if self.new {
-//             TodoId::New(self.id)
-//         } else {
-//             TodoId::Stored(self.id)
-//         };
-//         TodoEditor::new(
-//             "md",
-//             &self.title,
-//             &self.subtitle,
-//             &self.content,
-//             id,
-//             self.project_id,
-//         )
-//     }
-// }
+
 #[derive(Clone, Debug)]
 pub enum TodoId {
     New(i32),
@@ -68,12 +54,17 @@ pub enum TodoId {
 pub struct Tag {
     //todo
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TodoListState {
     VIEW,
     EDIT,
 }
 
+pub struct FileTodo {
+    filename: String,
+    file_content: String,
+}
+#[derive(Clone)]
 pub struct TodoList {
     todos: Vec<TodoEditor>,
     new_todos: i32,
@@ -98,79 +89,14 @@ impl Default for TodoList {
         Self {
             refresh: false,
             parent,
-            todos: Vec::from([
-                // TodoEditor::default(),
-                // TodoEditor::id_default(1),
-                // TodoEditor::id_default(2),
-                // TodoEditor::id_default(3),
-                // TodoEditor::id_default(4),
-                // TodoEditor::id_default(5),
-                // TodoEditor::id_default(6),
-                // TodoEditor::id_default(7),
-                // TodoEditor::id_default(8),
-                // TodoEditor::id_default(9),
-                // TodoEditor::id_default(10),
-                // TodoEditor::id_default(11),
-            ]),
+            todos: Vec::from([]),
             new_todos: 0,
             state: TodoListState::EDIT,
             target: None,
-            log: Log::new(Vec::from([
-                Ok(Success::new(
-                    "Connected to database.".into(),
-                    crate::ui::SuccessType::Database,
-                )),
-                // Ok(Success::new(
-                //     "success !".into(),
-                //     crate::ui::SuccessType::Database,
-                // )),
-                // Ok(Success::new(
-                //     "success with a very long string should look like this ?sdifjizejij hello !"
-                //         .into(),
-                //     crate::ui::SuccessType::Database,
-                // )),
-                // Err(DatabaseError::new("Error occured x y z")),
-                // Ok(Success::new(
-                //     "success !".into(),
-                //     crate::ui::SuccessType::Database,
-                // )),
-                // Ok(Success::new(
-                //     "success !".into(),
-                //     crate::ui::SuccessType::Database,
-                // )),
-                // Ok(Success::new(
-                //     "success !".into(),
-                //     crate::ui::SuccessType::Database,
-                // )),
-                // Ok(Success::new(
-                //     "success !".into(),
-                //     crate::ui::SuccessType::Database,
-                // )),
-                // Ok(Success::new(
-                //     "success !".into(),
-                //     crate::ui::SuccessType::Database,
-                // )),
-                // Ok(Success::new(
-                //     "success !".into(),
-                //     crate::ui::SuccessType::Database,
-                // )),
-                // Ok(Success::new(
-                //     "success !".into(),
-                //     crate::ui::SuccessType::Database,
-                // )),
-                // Ok(Success::new(
-                //     "success !".into(),
-                //     crate::ui::SuccessType::Database,
-                // )),
-                // Ok(Success::new(
-                //     "success !".into(),
-                //     crate::ui::SuccessType::Database,
-                // )),
-                // Ok(Success::new(
-                //     "success 2 !".into(),
-                //     crate::ui::SuccessType::Database,
-                // )),
-            ])),
+            log: Log::new(Vec::from([Ok(Success::new(
+                "Connected to database.".into(),
+                crate::ui::SuccessType::Database,
+            ))])),
         }
     }
 }
@@ -178,11 +104,7 @@ impl Default for TodoList {
 impl eframe::App for TodoList {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         use crate::ui::View as _;
-
-        // let size = ctx.available_rect();
-
         egui::TopBottomPanel::top(egui::Id::new("top_panel_todo_list"))
-            // .max_height(size.height() / 10.0)
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.label(RichText::new("Project Information").size(25.));
@@ -254,6 +176,53 @@ impl eframe::App for TodoList {
                                             }
                                         },
                                     );
+                                    let response_file = ui.add_enabled(self.todos.len() > 0, egui::Button::new("Generate todo files"));
+
+                                    let file_popup_id = ui.make_persistent_id("GENERATE_FILES_POPUP");
+                                   if response_file.clicked {
+                                        ui.memory_mut(|mem| mem.toggle_popup(file_popup_id));
+                                    }
+egui::popup::popup_above_or_below_widget(
+                                        ui,
+                                        file_popup_id,
+                                        &response_file,
+                                        below,
+                                        ignore_clicks,
+                                        |ui| {
+                                            ui.set_min_size(egui::Vec2 { x: 400.0, y: 180.0 });
+                                            ui.heading("Generate todo files :");
+                                            ui.separator();
+                                            // ui.checkbox(checked, text)
+                                            if ui.button("Generate file from all todos").clicked() {
+                                                let clone = &self.clone();
+                                                let file : FileTodo = clone.into();
+                                                let file_path = std::path::PathBuf::from(&self.parent.path);
+                                                let r = match file_path.canonicalize() {
+                                                    Ok(mut path) => {
+                                                        //FIXME Delete file if it exists. Also, no
+                                                        //unwrapping here
+
+                                               path.push(file.filename);
+                                                        let mut file_handle = std::fs::File::create_new(path).unwrap();
+                                                        file_handle.write_all(&file.file_content.as_bytes()).unwrap();
+                                                        Ok(Success::new(
+                                                    format!("Generated file for all todos for this project.",),
+                                                    crate::ui::SuccessType::Database,
+                                                ))
+                                                    },
+                                                    Err(err) => {
+                                                        Err(DatabaseError::new(&err.to_string()))
+                                                    },
+                                                };
+                                                
+                                                self.push_log(r);
+                                                ui.memory_mut(|mem| mem.toggle_popup(file_popup_id));
+                                            }
+                                            if ui.button("Cancel").clicked() {
+                                                ui.memory_mut(|mem| mem.toggle_popup(file_popup_id));
+                                            }
+                                        },
+                                    );
                                 }
 
                                 _ => {
@@ -278,21 +247,50 @@ impl eframe::App for TodoList {
         });
     }
 }
-// impl crate::editor::WindowUI for TodoList {
-//     fn name(&self) -> &str {
-//        "🖮 Todo List"
-//     }
 
-//     fn show(&mut self, ctx: &egui::Context, open: &mut bool) {
-//         use crate::editor::View as _;
-//         egui::Window::new(self.name())
-//             .open(open)
-//             .default_height(500.0)
-//             .show(ctx, |ui| self.ui(ui));
-//     }
-// }
+impl From<&TodoList> for FileTodo {
+    fn from(value: &TodoList) -> Self {
+        let mut file_str = String::new();
+        for todo in &value.todos {
+            file_str.push_str(&todo.to_display());
+            file_str.push('\n');
+        }
+
+        Self {
+            filename: "todos.md".into(),
+            file_content: file_str,
+        }
+    }
+}
+
+impl From<&TodoEditor> for FileTodo {
+    fn from(value: &TodoEditor) -> Self {
+        Self {
+            filename: String::new() + "todo-" + &value.title + ".md",
+            file_content: value.to_display(),
+        }
+    }
+}
 
 impl TodoList {
+    pub fn to_file(&self, target: Option<Vec<TodoEditor>>) -> FileTodo {
+        match target {
+            Some(todos) => {
+                let mut display_str = String::new();
+                for todo in &todos {
+                    display_str.push_str(&(todo.to_display() + "\n"));
+                }
+                return FileTodo {
+                    filename: "todos.md".into(),
+                    file_content: display_str,
+                };
+            }
+            None => self.into(),
+        }
+    }
+    pub fn to_multiple_files(&self, target: Option<Vec<TodoEditor>>) -> Vec<FileTodo> {
+        todo!();
+    }
     pub fn push_log(&mut self, result: Result<Success, DatabaseError>) {
         self.log.push(result);
         self.log.should_scroll();
@@ -312,7 +310,7 @@ impl TodoList {
                 self.parent.id,
             ))
             .clone();
-        let display = format!("{}\n\n{}", target.title_str(), target.code);
+        let display = target.to_display();
 
         let mut cache = egui_commonmark::CommonMarkCache::default();
         egui_commonmark::CommonMarkViewer::new().show(ui, &mut cache, &display);
