@@ -1,6 +1,6 @@
 //
 
-use egui::{Align, Color32, Pos2, RichText, ScrollArea};
+use egui::{Align, Color32, Pos2, RichText, ScrollArea, TextStyle};
 
 use crate::{
     database::{self, delete_all_todos, delete_todo, get_todos_for_proj, Save},
@@ -219,21 +219,41 @@ impl eframe::App for TodoList {
                                     }
                                     if ui.button("Save all").clicked() {
                                         let r = self.save_to_db();
-                                        self.log.push(r);
-                                        self.log.should_scroll();
-                                        self.refresh = true;
+                                        self.push_log(r);
                                     }
-                                    if ui.button("Delete all").clicked() {
-                                        delete_all_todos(&self.parent.id);
-                                        // FIXME make this have a confirmation screen.
-                                        let r = Ok(Success::new(
-                                            format!("Deleted all todos for this project.",),
-                                            crate::ui::SuccessType::Database,
-                                        ));
-                                        self.log.push(r);
-                                        self.log.should_scroll();
-                                        self.refresh = true;
+                                    let response = ui.button("Delete all");
+                                    let popup_id = ui.make_persistent_id("DELETE_ALL_POPUP");
+                                    if response.clicked() {
+                                        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
                                     }
+                                    let below = egui::AboveOrBelow::Below;
+                                    let ignore_clicks =
+                                        egui::popup::PopupCloseBehavior::IgnoreClicks;
+                                    egui::popup::popup_above_or_below_widget(
+                                        ui,
+                                        popup_id,
+                                        &response,
+                                        below,
+                                        ignore_clicks,
+                                        |ui| {
+                                            ui.set_min_size(egui::Vec2 { x: 400.0, y: 180.0 });
+                                            ui.heading("This operation is not recoverable. You will delete every todo created for this project.");
+                                            ui.separator();
+                                            if ui.button("Confirm deletion").clicked() {
+                                                delete_all_todos(&self.parent.id);
+                                                // FIXME make this have a confirmation screen.
+                                                let r = Ok(Success::new(
+                                                    format!("Deleted all todos for this project.",),
+                                                    crate::ui::SuccessType::Database,
+                                                ));
+                                                self.push_log(r);
+                                                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                                            }
+                                            if ui.button("Cancel").clicked() {
+                                                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                                            }
+                                        },
+                                    );
                                 }
 
                                 _ => {
@@ -273,6 +293,11 @@ impl eframe::App for TodoList {
 // }
 
 impl TodoList {
+    pub fn push_log(&mut self, result: Result<Success, DatabaseError>) {
+        self.log.push(result);
+        self.log.should_scroll();
+        self.refresh = true;
+    }
     pub fn display(&mut self, ui: &mut egui::Ui) {
         //TODO move the cache to the list
         let target = self
@@ -323,8 +348,9 @@ impl crate::ui::View for TodoList {
         let maximum = used_rectangle.max;
         let mut rows = 0f32;
         let mut columns = 0f32;
-        let default_width = 200.0;
+        let default_width = 400.0;
         let default_height = 500.0;
+        let mut added_logs: Vec<Result<Success, DatabaseError>> = Vec::new();
         for element in &mut self.todos {
             let pos = if rows * x_delta > maximum.x - default_width {
                 columns += 1f32;
@@ -358,29 +384,31 @@ impl crate::ui::View for TodoList {
                         .clicked()
                     {
                         let r = element.save_to_db();
-                        self.log.push(r);
-
-                        self.log.should_scroll();
-                        self.refresh = true;
-                        //TODO save to db ?
+                        added_logs.push(r);
                     }
                     if ui.button("Delete").clicked() {
                         match element.id {
                             TodoId::New(_) => todo!(),
                             TodoId::Stored(id) => {
                                 delete_todo(&id);
-                                self.log.push(Ok(Success::new(
+                                let r = Ok(Success::new(
                                     format!(
                                         "Deleted Todo ({}, titled {} ) successfully.",
                                         id, element.title
                                     ),
                                     crate::ui::SuccessType::Database,
-                                )));
-                                self.refresh = true;
+                                ));
+
+                                added_logs.push(r);
                             }
                         }
                     }
                 });
+        }
+        if added_logs.len() > 0 {
+            for log in added_logs {
+                self.push_log(log);
+            }
         }
     }
 }

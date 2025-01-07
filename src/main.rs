@@ -6,6 +6,7 @@ use my_cli::auth;
 use my_cli::editor::TodoEditor;
 use my_cli::exceptions::{Action, HandleException, Warning};
 use my_cli::models::{Project, ProjectWithLanguageName};
+use my_cli::mover::move_to;
 use my_cli::todos::{TodoId, TodoList};
 use my_cli::{
     database::{
@@ -29,6 +30,21 @@ struct Cli {
     command: Commands,
     //   #[arg(optional = true)]
     // path: String,
+}
+#[derive(Subcommand, Debug, Clone)]
+enum TodoActions {
+    Show {
+        ///Path to the matching project.
+        path: Option<String>,
+        //TODO add tags ?
+    },
+    Add {
+        ///Your new todo's title
+        todo_title: String,
+        ///Path to the matching project.
+        path: Option<String>,
+        //TODO add tags ?
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -79,6 +95,10 @@ enum Commands {
         // #[arg(short, long)]
         // name: String,
         //
+    },
+    Todo {
+        #[command(subcommand)]
+        action: TodoActions,
     },
     /// Add languages & projects
     Add {
@@ -144,94 +164,39 @@ fn parse(warnings: Arc<Mutex<Vec<Warning>>>) {
         // } => my_cli::ssh::ssh_into(&mut conn, new, name, host, user, settings),
         // Commands::Move { name } => mover::move_to(&mut conn, name),
         // Commands::Run { name, command } => run_command(&mut conn, name, command),
-        Commands::Add { add_type } => {
-            match &add_type {
-                TypeOfAdds::Lang { language_name } => {
-                    let lg = create_language(&mut conn, language_name);
-                    let mut table = tabled::Table::new(vec![lg.clone()]);
-                    print(&mut table, settings);
-                }
-                TypeOfAdds::Project {
-                    project_path,
-                    project_name,
-                    language,
-                } => {
-                    let path_item = project_path.resolve();
-                    match path_item.to_str() {
-                        Some(val) => {
-                            let prj = create_project(&mut conn, project_name, val, language);
-                            let mut table = tabled::Table::new(vec![prj.clone()]);
-                            print(&mut table, settings);
-                        }
-                        None => {
-                            panic!("No valid path");
-                        }
+        Commands::Add { add_type } => match &add_type {
+            TypeOfAdds::Lang { language_name } => {
+                let lg = create_language(&mut conn, language_name);
+                let mut table = tabled::Table::new(vec![lg.clone()]);
+                print(&mut table, settings);
+            }
+            TypeOfAdds::Project {
+                project_path,
+                project_name,
+                language,
+            } => {
+                let path_item = project_path.resolve();
+                match path_item.to_str() {
+                    Some(val) => {
+                        let prj = create_project(&mut conn, project_name, val, language);
+                        let mut table = tabled::Table::new(vec![prj.clone()]);
+                        print(&mut table, settings);
                     }
-                }
-                TypeOfAdds::Todo { todo_title, path } => {
-                    let current = std::env::current_dir().unwrap();
-                    let mut target_proj: Option<&ProjectWithLanguageName> = None;
-                    let target = match path {
-                        //TODO handle errors
-                        Some(path) => match path.try_resolve() {
-                            Ok(p) => p
-                                .to_path_buf()
-                                .canonicalize()
-                                .expect("The path should support being canonicalized."),
-                            Err(err) => {
-                                println!("Err ----------- \n {}", err.to_string());
-                                panic!("An error occured. The path provided is invalid.");
-                            }
-                        },
-                        None => current.canonicalize().unwrap(),
-                    };
-                    let mut projects = all_projects();
-                    for project in projects.iter_mut() {
-                        //FIXME unsafe unwrap
-                        let p = PathBuf::from(&project.path).canonicalize();
-                        match p {
-                            Ok(v) => {
-                                if target.eq(&v) {
-                                    target_proj = Some(project);
-                                    //FIXME we probably shouldn't break, but instead continue and check for similar values (e.g we're one level deep into the file system)
-                                    break;
-                                }
-                            }
-                            //TODO can do better error handling here
-                            Err(_err) => {
-                                let msg = format!("The path {} cannot be found. Consider removing or disabling the project ({}) ...", &project.path, project.name);
-                                warnings.lock().push(Warning::new(&msg, true))
-                            }
-                        };
-                    }
-                    if let Some(project) = target_proj {
-                        let options = eframe::NativeOptions {
-                            viewport: egui::ViewportBuilder::default().with_maximized(true), //.with_inner_size([320.0, 240.0])
-                            ..Default::default()
-                        };
-
-                        let mut list: TodoList = TodoList::default();
-                        list.with_parent(project);
-                        list.retrieve();
-                        let todo =
-                            TodoEditor::new("md", todo_title, "", "", TodoId::New(0), project.id);
-
-                        list.add(todo);
-                        eframe::run_native(
-                            "Your Todos",
-                            options,
-                            Box::new(|_cc| {
-                                // This gives us image support:
-                                // egui_extras::install_image_loaders(&cc.egui_ctx);
-
-                                Ok(Box::new(list))
-                            }),
-                        )
-                        .unwrap();
+                    None => {
+                        panic!("No valid path");
                     }
                 }
             }
-        }
+            TypeOfAdds::Todo { todo_title, path } => {
+                open_todo(path, Some(todo_title), warnings);
+            }
+        },
+
+        Commands::Move { name } => move_to(name),
+        Commands::Todo { action } => match action {
+            TodoActions::Show { path } => open_todo(path, None, warnings),
+            TodoActions::Add { todo_title, path } => open_todo(path, Some(todo_title), warnings),
+        },
         Commands::Show {
             searchterm,
             lang_query,
@@ -279,48 +244,69 @@ fn main() {
     }
 }
 
-fn view() {
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default(), //.with_inner_size([320.0, 240.0])
-        ..Default::default()
+fn open_todo(path: &Option<String>, todo_title: Option<&str>, warnings: Arc<Mutex<Vec<Warning>>>) {
+    let current = std::env::current_dir().unwrap();
+    let mut target_proj: Option<&ProjectWithLanguageName> = None;
+    let target = match path {
+        //TODO handle errors
+        Some(path) => match path.try_resolve() {
+            Ok(p) => p
+                .to_path_buf()
+                .canonicalize()
+                .expect("The path should support being canonicalized."),
+            Err(err) => {
+                println!("Err ----------- \n {}", err.to_string());
+                panic!("An error occured. The path provided is invalid.");
+            }
+        },
+        None => current.canonicalize().unwrap(),
     };
-    eframe::run_native(
-        "Your Todos",
-        options,
-        Box::new(|_cc| {
-            // This gives us image support:
-            // egui_extras::install_image_loaders(&cc.egui_ctx);
+    let mut projects = all_projects();
+    for project in projects.iter_mut() {
+        //FIXME unsafe unwrap
+        let p = PathBuf::from(&project.path).canonicalize();
+        match p {
+            Ok(v) => {
+                if target.eq(&v) {
+                    target_proj = Some(project);
+                    //FIXME we probably shouldn't break, but instead continue and check for similar values (e.g we're one level deep into the file system)
+                    break;
+                }
+            }
+            //TODO can do better error handling here
+            Err(_err) => {
+                let msg = format!("The path {} cannot be found. Consider removing or disabling the project ({}) ...", &project.path, project.name);
+                warnings.lock().push(Warning::new(&msg, true))
+            }
+        };
+    }
+    if let Some(project) = target_proj {
+        let options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default().with_maximized(true), //.with_inner_size([320.0, 240.0])
+            ..Default::default()
+        };
 
-            Ok(Box::new(TodoList::default()))
-        }),
-    )
-    .unwrap();
+        let mut list: TodoList = TodoList::default();
+        list.with_parent(project);
+        list.retrieve();
+        match todo_title {
+            Some(title) => {
+                let todo = TodoEditor::new("md", title, "", "", TodoId::New(0), project.id);
+                list.add(todo);
+            }
+            None => {}
+        }
+
+        eframe::run_native(
+            "Your Todos",
+            options,
+            Box::new(|_cc| {
+                // This gives us image support:
+                // egui_extras::install_image_loaders(&cc.egui_ctx);
+
+                Ok(Box::new(list))
+            }),
+        )
+        .unwrap();
+    }
 }
-
-// struct Foo {
-//     message: String,
-// }
-
-// fn get_foo(message: &str) -> Foo {
-//     Foo {
-//         message: String::from(message),
-//     }
-// }
-
-// fn use_foo(foo: Foo) {
-//     println!("{}", foo.message);
-// }
-// fn main() {
-//     let foo: Foo = Foo {
-//         message: String::from("hello world"),
-//     };
-
-//     let some_foo = Foo {
-//         message: String::from("hello world"),
-//     };
-
-//     let some_other_foo = get_foo("hello world");
-//     use_foo(foo);
-//     use_foo(some_foo);
-//     use_foo(some_other_foo);
-// }
