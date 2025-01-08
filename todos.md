@@ -11,7 +11,7 @@
 
 # For the todo feature : 
 
-
+- [x] Test if the file is properly removed for the basic usage
 - [x] add a confirmation screen to "delete all" 
 - [x] make the self.log.push & self.refresh a single method to call with the object to push
 - [ ] fix the refresh itself to keep (or not) the newly added todos

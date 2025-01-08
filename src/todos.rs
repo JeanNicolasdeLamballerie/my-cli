@@ -182,7 +182,7 @@ impl eframe::App for TodoList {
                                    if response_file.clicked {
                                         ui.memory_mut(|mem| mem.toggle_popup(file_popup_id));
                                     }
-egui::popup::popup_above_or_below_widget(
+                                    egui::popup::popup_above_or_below_widget(
                                         ui,
                                         file_popup_id,
                                         &response_file,
@@ -194,27 +194,7 @@ egui::popup::popup_above_or_below_widget(
                                             ui.separator();
                                             // ui.checkbox(checked, text)
                                             if ui.button("Generate file from all todos").clicked() {
-                                                let clone = &self.clone();
-                                                let file : FileTodo = clone.into();
-                                                let file_path = std::path::PathBuf::from(&self.parent.path);
-                                                let r = match file_path.canonicalize() {
-                                                    Ok(mut path) => {
-                                                        //FIXME Delete file if it exists. Also, no
-                                                        //unwrapping here
-
-                                               path.push(file.filename);
-                                                        let mut file_handle = std::fs::File::create_new(path).unwrap();
-                                                        file_handle.write_all(&file.file_content.as_bytes()).unwrap();
-                                                        Ok(Success::new(
-                                                    format!("Generated file for all todos for this project.",),
-                                                    crate::ui::SuccessType::Database,
-                                                ))
-                                                    },
-                                                    Err(err) => {
-                                                        Err(DatabaseError::new(&err.to_string()))
-                                                    },
-                                                };
-                                                
+                                                let r = self.del_file();
                                                 self.push_log(r);
                                                 ui.memory_mut(|mem| mem.toggle_popup(file_popup_id));
                                             }
@@ -273,6 +253,38 @@ impl From<&TodoEditor> for FileTodo {
 }
 
 impl TodoList {
+    pub fn del_file(&mut self) -> Result<Success, DatabaseError> {
+        let clone = &self.clone();
+        let file: FileTodo = clone.into();
+        let file_path = std::path::PathBuf::from(&self.parent.path);
+        match file_path.canonicalize() {
+            Ok(mut path) => {
+                //FIXME Delete file if it exists. Also, no
+                //unwrapping here
+                path.push(file.filename);
+                match path.canonicalize() {
+                    Ok(p) => {
+                        let removed = std::fs::remove_file(p);
+                        if removed.is_err() {
+                            //FIXME make Error an enum
+                            //with either db or file
+                            return Err(DatabaseError::new(&removed.unwrap_err().to_string()));
+                        }
+                    }
+                    Err(_) => (),
+                };
+                let mut file_handle = std::fs::File::create_new(path).unwrap();
+                file_handle
+                    .write_all(&file.file_content.as_bytes())
+                    .unwrap();
+                Ok(Success::new(
+                    format!("Generated file for all todos for this project.",),
+                    crate::ui::SuccessType::Database,
+                ))
+            }
+            Err(err) => Err(DatabaseError::new(&err.to_string())),
+        }
+    }
     pub fn to_file(&self, target: Option<Vec<TodoEditor>>) -> FileTodo {
         match target {
             Some(todos) => {
