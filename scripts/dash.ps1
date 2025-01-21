@@ -1,8 +1,25 @@
 $path = $HOME + "\code\projects\my-cli\target\debug\my-cli.exe"
-function Invoke-Rust-mycli {
-    # TODO : handle stdout & stderr differently instead of crashing
-    Write-Host moving to "$args";
-    $output = cmd /c $path move "$args" 2`>`&1
-    Set-Location "$output"
+function Invoke-Rust-dash
+{
+  # TODO : handle stdout & stderr differently instead of crashing
+  $output = cmd /c $path move "$args" 2`>`&1
+  Set-Location "$output"
 }
-Set-Alias dash Invoke-Rust-mycli
+
+
+# DEV
+#
+#
+
+function Invoke-Rust-cli
+{
+  # TODO : handle stdout & stderr differently instead of crashing
+  Write-Host "Running debug version.";
+  cmd /c $path $args;
+
+}
+
+#
+#
+Set-Alias dash Invoke-Rust-dash
+Set-Alias rush Invoke-Rust-cli
