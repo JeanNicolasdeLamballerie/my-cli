@@ -1,21 +1,4 @@
-// ----------------------------------------------------------------------------
-
-// #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-// #[cfg_attr(feature = "serde", serde(default))]
 //
-//
-//
-//
-//
-//pub struct FormattedTodo {
-//     pub id: i32,
-//     pub title: String,
-//     pub subtitle: String,
-//     pub content: String,
-//     pub project_id : i32,
-// }
-
-// use crate::models::FormattedTodo;
 
 use crate::{
     database::{self, Save},
@@ -24,11 +7,6 @@ use crate::{
     ui::{DatabaseError, Success},
 };
 
-// impl From<FormattedTodo> for CodeEditor {
-//     fn from(value: FormattedTodo) -> Self {
-//
-//     }
-// }
 pub trait Modified {
     ///Returns whether the struct's fields are different from the backed up fields.
     fn is_modified(&self) -> bool;
@@ -114,6 +92,10 @@ fn extract_name_gid(id: &TodoId, title: &str) -> (String, String) {
     }
 }
 impl TodoEditor {
+    pub fn update_name(&mut self) {
+        let (name, _) = extract_name_gid(&self.id, &self.title);
+        self.name = name;
+    }
     pub fn id_default(id: i32) -> Self {
         let mut td = TodoEditor::default();
         td.id = TodoId::Stored(id);
@@ -154,39 +136,6 @@ impl TodoEditor {
         format!("{}\n\n{}", self.title_str(), self.code)
     }
 }
-
-// impl Into<FormattedTodo> for TodoEditor {
-//     fn into(self) -> FormattedTodo {
-//         let Self {
-//             language,
-//             code,
-//             back_up,
-//             title,
-//             title_backup,
-//             name,
-//             modified,
-//             subtitle,
-//             subtitle_backup,
-//             id,
-//             project_id,
-//             gid,
-//         } = self;
-
-//         let (new, id) = match id {
-//             TodoId::New(id) => (true, id),
-//             TodoId::Stored(id) => (false, id),
-//         };
-//         FormattedTodo {
-//             project_id,
-//             id,
-//             content: code,
-//             title,
-//             subtitle,
-//             new,
-//         }
-//     }
-// }
-
 impl crate::database::Save<FormattedTodo> for TodoEditor {
     fn save_to_db(&mut self) -> Result<Success, DatabaseError> {
         let todo = self.to_saved_format();
@@ -254,7 +203,6 @@ impl crate::ui::View for TodoEditor {
             subtitle_backup: _,
             modified: _,
         } = self;
-
         ui.horizontal(|ui| {
             ui.set_height(0.0);
             ui.label("Your todo...");
@@ -306,6 +254,8 @@ impl crate::ui::View for TodoEditor {
                     .layouter(&mut layouter),
             );
         });
+
+        self.update_name();
     }
 }
 

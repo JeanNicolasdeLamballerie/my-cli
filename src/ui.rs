@@ -1,3 +1,4 @@
+use humantime;
 use std::time::*;
 
 use egui::Align;
@@ -128,9 +129,15 @@ impl View for Log<Result<Success, DatabaseError>> {
             for log in &self.value {
                 match log {
                     Ok(s) => {
+                        // s.timestamp.elapsed().unwrap();
+                        // humantime::format_duration(s.timestamp.elapsed().unwrap());
                         let time = s.timestamp.elapsed().unwrap().as_secs();
+                        let time_display = (&format!("{}s", time))
+                            .parse::<humantime::Duration>()
+                            .unwrap();
+
                         //TODO add icon success / failure
-                        ui.label(format!("[{} seconds ago] - {}", time, s.message));
+                        ui.label(format!("[{} ago] - {}", time_display, s.message));
                         ui.separator();
                     }
                     Err(db_err) => {
@@ -147,5 +154,6 @@ impl View for Log<Result<Success, DatabaseError>> {
                 ui.scroll_to_cursor(Some(Align::TOP));
             };
         });
+        ui.ctx().request_repaint_after(Duration::new(1, 0));
     }
 }
