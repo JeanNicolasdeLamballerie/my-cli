@@ -3,6 +3,7 @@ pub mod config;
 pub mod database;
 pub mod editor;
 pub mod exceptions;
+pub mod fonts;
 pub mod logger;
 pub mod models;
 pub mod mover;

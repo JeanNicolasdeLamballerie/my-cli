@@ -5,6 +5,7 @@ use my_cli::database::{all_projects, run_migration, CryptoFilterType};
 use my_cli::auth;
 use my_cli::editor::TodoEditor;
 use my_cli::exceptions::{Action, HandleException, Warning};
+use my_cli::fonts::FONTS;
 use my_cli::models::{Project, ProjectWithLanguageName};
 use my_cli::mover::move_to;
 use my_cli::todos::{TodoId, TodoList};
@@ -307,7 +308,9 @@ fn open_todo(path: &Option<String>, todo_title: Option<&str>, warnings: Arc<Mute
         eframe::run_native(
             "Your Todos",
             options,
-            Box::new(|_cc| {
+            Box::new(|cc| {
+                println!("adding icons...");
+                FONTS::add_rounded_icons(&cc.egui_ctx);
                 // This gives us image support:
                 // egui_extras::install_image_loaders(&cc.egui_ctx);
 
