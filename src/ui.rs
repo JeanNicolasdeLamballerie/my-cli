@@ -1,12 +1,11 @@
-use humantime;
 use std::time::*;
 
 use egui::Align;
 
-///This trait should implement displaying errors or success.
-pub trait Feedback<T> {
-    fn process(&mut self, ui: &mut egui::Ui) -> ();
-}
+// ///This trait should implement displaying errors or success.
+// pub trait Feedback<T> {
+//     fn process(&mut self, ui: &mut egui::Ui) -> ();
+// }
 
 #[derive(Clone)]
 /// Struct holding the error (or success) values to display. Calling `.process`
@@ -120,11 +119,11 @@ pub trait WindowUI {
     fn name(&self) -> &str;
 
     /// Show windows, etc
-    fn show(&mut self, ctx: &egui::Context, open: &mut bool);
+    fn _show(&mut self, ctx: &egui::Context, open: &mut bool);
 }
 
 impl View for Log<Result<Success, DatabaseError>> {
-    fn ui(&mut self, ui: &mut egui::Ui) -> () {
+    fn ui(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             for log in &self.value {
                 match log {
@@ -132,9 +131,8 @@ impl View for Log<Result<Success, DatabaseError>> {
                         // s.timestamp.elapsed().unwrap();
                         // humantime::format_duration(s.timestamp.elapsed().unwrap());
                         let time = s.timestamp.elapsed().unwrap().as_secs();
-                        let time_display = (&format!("{}s", time))
-                            .parse::<humantime::Duration>()
-                            .unwrap();
+                        let time_display =
+                            format!("{}s", time).parse::<humantime::Duration>().unwrap();
 
                         //TODO add icon success / failure
                         ui.label(format!("[{} ago] - {}", time_display, s.message));

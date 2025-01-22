@@ -176,7 +176,7 @@ impl crate::ui::WindowUI for TodoEditor {
         &self.name
     }
 
-    fn show(&mut self, ctx: &egui::Context, open: &mut bool) {
+    fn _show(&mut self, ctx: &egui::Context, open: &mut bool) {
         use crate::ui::View as _;
         egui::Window::new(self.name())
             .open(open)

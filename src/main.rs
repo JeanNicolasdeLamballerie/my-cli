@@ -4,9 +4,9 @@ use my_cli::database::{all_projects, run_migration, CryptoFilterType};
 // use my_cli::ssh::ssh_into;
 use my_cli::auth;
 use my_cli::editor::TodoEditor;
-use my_cli::exceptions::{Action, HandleException, Warning};
+use my_cli::exceptions::{HandleException, Warning};
 use my_cli::fonts::FONTS;
-use my_cli::models::{Project, ProjectWithLanguageName};
+use my_cli::models::ProjectWithLanguageName;
 use my_cli::mover::move_to;
 use my_cli::todos::{TodoId, TodoList};
 use my_cli::{
@@ -14,10 +14,8 @@ use my_cli::{
         create_language, create_project, establish_connection, fetch_languages, fetch_projects,
     },
     logger::{self, print},
-    mover,
 };
 use resolve_path::PathResolveExt;
-use std::env::current_dir;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -263,7 +261,7 @@ fn open_todo(path: &Option<String>, todo_title: Option<&str>, warnings: Arc<Mute
                 .canonicalize()
                 .expect("The path should support being canonicalized."),
             Err(err) => {
-                println!("Err ----------- \n {}", err.to_string());
+                println!("Err ----------- \n {}", err);
                 panic!("An error occured. The path provided is invalid.");
             }
         },
@@ -297,12 +295,9 @@ fn open_todo(path: &Option<String>, todo_title: Option<&str>, warnings: Arc<Mute
         let mut list: TodoList = TodoList::default();
         list.with_parent(project);
         list.retrieve();
-        match todo_title {
-            Some(title) => {
-                let todo = TodoEditor::new("md", title, "", "", TodoId::New(0), project.id);
-                list.add(todo);
-            }
-            None => {}
+        if let Some(title) = todo_title {
+            let todo = TodoEditor::new("md", title, "", "", TodoId::New(0), project.id);
+            list.add(todo);
         }
 
         eframe::run_native(

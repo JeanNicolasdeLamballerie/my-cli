@@ -1,4 +1,4 @@
-use diesel::{prelude::*, sql_types::Nullable};
+use diesel::prelude::*;
 use tabled::Tabled;
 
 // --------------------------------------------------------

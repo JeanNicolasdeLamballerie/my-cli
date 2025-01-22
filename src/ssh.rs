@@ -15,7 +15,7 @@ use crate::{
 pub fn ssh_into(
     conn: &mut SqliteConnection,
     new: &Option<String>,
-    name: &String,
+    name: &str,
     host: &Option<String>,
     user: &Option<String>,
     settings: &mut TablingOptionsBuilder,
@@ -24,11 +24,11 @@ pub fn ssh_into(
         Some(pw_name) => {
             let user_str = user.clone().unwrap();
             let host_str = host.clone().unwrap();
-            create_ssh(conn, &name, &pw_name, &user_str, &host_str)
+            create_ssh(conn, name, pw_name, &user_str, &host_str)
         }
-        None => get_ssh(conn, &name), //  let mut project = fetch_single_project(conn, &name);
-                                      // UserOrganization::belonging_to(&organizations)
-                                      // .inner_join(user::table)
+        None => get_ssh(conn, name), //  let mut project = fetch_single_project(conn, &name);
+                                     // UserOrganization::belonging_to(&organizations)
+                                     // .inner_join(user::table)
     };
     let mut table = tabled::Table::new(vec![ssh.clone()]);
     print(&mut table, settings);
@@ -54,7 +54,7 @@ pub fn ssh_into(
         .stdin
         .as_ref()
         .unwrap()
-        .write(&password.as_bytes())
+        .write_all(password.as_bytes())
         .unwrap();
     //  println!("wrote password");
     if let Some(ref mut stdout) = handle.stdout {
