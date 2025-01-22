@@ -1,17 +1,13 @@
-//
+use std::{io::Write, path};
 
-use std::{io::Write, ops::Deref, path, str::FromStr};
-
-use egui::{
-    ahash::HashMapExt, text::LayoutJob, Align, Color32, Pos2, RichText, ScrollArea, TextStyle,
-};
+use egui::{text::LayoutJob, Color32, Pos2, RichText, ScrollArea};
 
 use crate::{
     database::{self, delete_all_todos, delete_todo, get_todos_for_proj, Save},
     editor::{Modified, TodoEditor},
     fonts::{IconsCodePoints, FONTS},
     models::{FormattedTodo, NewTodo, Project, ProjectWithLanguageName, UpdateTodo},
-    ui::{DatabaseError, Log, Success, WindowUI},
+    ui::{DatabaseError, Log, Success},
 };
 
 impl From<TodoEditor> for FormattedTodo {
@@ -193,7 +189,7 @@ impl eframe::App for TodoList {
                                             if ui.button("Confirm deletion").clicked() {
                                                 delete_all_todos(&self.parent.id);
                                                 let r = Ok(Success::new(
-                                                    format!("Deleted all todos for this project.",),
+                                                    "Deleted all todos for this project.".to_string(),
                                                     crate::ui::SuccessType::Database,
                                                 ));
                                                 self.push_log(r);
@@ -204,7 +200,7 @@ impl eframe::App for TodoList {
                                             }
                                         },
                                     );
-                                    let response_file = ui.add_enabled(self.todos.len() > 0, egui::Button::new("Generate todo files"));
+                                    let response_file = ui.add_enabled(!self.todos.is_empty(), egui::Button::new("Generate todo files"));
 
                                     let file_popup_id = ui.make_persistent_id("GENERATE_FILES_POPUP");
                                    if response_file.clicked {
@@ -239,7 +235,7 @@ impl eframe::App for TodoList {
                                                     // popup is 400. We end up with 35px on each
                                                     // side.
                                                     ui.add_space(35.);
-                                                let frame = egui::Frame::group(&ui.style()).fill(Color32::BLACK);
+                                                let frame = egui::Frame::group(ui.style()).fill(Color32::BLACK);
                                                 frame.show(ui,|ui| {
 
 
@@ -251,7 +247,7 @@ impl eframe::App for TodoList {
                                                         ui.separator();
                                                         if ui.button("Generate multiple files").clicked() {
                                                             let path = &mut self.multiple_files.path;
-                                                            if path == "" {
+                                                            if path.is_empty() {
                                                                 let parent_path = self.parent.path.clone();
                                                                 let mut p = std::path::PathBuf::from(&parent_path).canonicalize().unwrap();
                                                                 p.push("todos");                                                    
@@ -405,25 +401,20 @@ impl TodoList {
         match file_path.canonicalize() {
             Ok(mut path) => {
                 path.push(file.filename);
-                match path.canonicalize() {
-                    Ok(p) => {
-                        let removed = std::fs::remove_file(p);
-                        if removed.is_err() {
-                            //FIXME make Error an enum
-                            //with either db or file
-                            return Err(DatabaseError::new(&removed.unwrap_err().to_string()));
-                        }
-                    }
-                    Err(_) => (),
+                if let Ok(p) = path.canonicalize() {
+                    let removed = std::fs::remove_file(p);
+                    if let Err(err) = removed {
+                        //FIXME make Error an enum
+                        //with either db or file
+                        return Err(DatabaseError::new(&err.to_string()));
+                    };
                 };
                 // FIXME remove unwrap here for file errors. Do this when a proper error enum
                 // exists
                 let mut file_handle = std::fs::File::create_new(path).unwrap();
-                file_handle
-                    .write_all(&file.file_content.as_bytes())
-                    .unwrap();
+                file_handle.write_all(file.file_content.as_bytes()).unwrap();
                 Ok(Success::new(
-                    format!("Generated file for all todos for this project.",),
+                    "Generated file for all todos for this project.".to_string(),
                     crate::ui::SuccessType::Database,
                 ))
             }
@@ -483,7 +474,7 @@ impl TodoList {
 impl crate::ui::View for TodoList {
     fn ui(&mut self, ui: &mut egui::Ui) {
         use crate::ui::WindowUI as _;
-        if self.remove.len() > 0 {
+        if !self.remove.is_empty() {
             for &idx in &self.remove {
                 self.todos.remove(idx);
             }
@@ -505,8 +496,7 @@ impl crate::ui::View for TodoList {
         let default_width = 400.0;
         let default_height = 500.0;
         let mut added_logs: Vec<Result<Success, DatabaseError>> = Vec::new();
-        let mut todo_index = 0;
-        for element in &mut self.todos {
+        for (todo_index, element) in &mut self.todos.iter_mut().enumerate() {
             let pos = if rows * x_delta > maximum.x - default_width {
                 columns += 1f32;
                 rows = 1f32;
@@ -573,9 +563,8 @@ impl crate::ui::View for TodoList {
                         }
                     };
                 });
-            todo_index += 1;
         }
-        if added_logs.len() > 0 {
+        if !added_logs.is_empty() {
             for log in added_logs {
                 self.push_log(log);
             }
@@ -677,12 +666,12 @@ where
                 }
             },
             None => {
-                let result = Err(DatabaseError::new(&format!("The path was fully unwinded and couldn't find a correct base directory(e.g, a drive).")));
+                let result = Err(DatabaseError::new("The path was fully unwinded and couldn't find a correct base directory(e.g, a drive)."));
                 break result;
             }
         }
     };
-    return result;
+    result
 }
 fn establish_path<Path>(
     leftovers: Vec<Option<path::Component>>,
@@ -694,13 +683,10 @@ where
     use std::path;
     let canonicalized_path = canonicalized_path.as_ref().to_path_buf();
     let mut create = path::PathBuf::new();
-    for element in leftovers.iter().rev() {
-        if let Some(component) = element {
-            create.push(component);
-        }
+    for component in leftovers.iter().rev().flatten() {
+        create.push(component);
     }
-    let final_path = canonicalized_path.join(create);
-    final_path
+    canonicalized_path.join(create)
 }
 
 fn create_files<Path>(files: &[FileTodo], path: Path) -> Vec<Result<Success, DatabaseError>>
@@ -722,17 +708,15 @@ where
             )));
             for file in files.iter() {
                 let path = path.as_ref().to_path_buf().join(&file.filename);
-                match path.canonicalize() {
-                    Ok(p) => {
-                        let removed = std::fs::remove_file(p);
-                        if removed.is_err() {
-                            //FIXME make Error an enum
-                            //with either db or file
-                            logs.push(Err(DatabaseError::new(&removed.unwrap_err().to_string())));
-                            continue;
-                        }
-                    }
-                    Err(_) => (),
+                if let Ok(p) = path.canonicalize() {
+                    // Ok(p) => {
+                    let removed = std::fs::remove_file(p);
+                    if let Err(err) = removed {
+                        //FIXME make Error an enum
+                        //with either db or file
+                        logs.push(Err(DatabaseError::new(&err.to_string())));
+                        continue;
+                    };
                 };
                 let file_handle = std::fs::File::create_new(&path);
                 if let Err(err) = &file_handle {
@@ -742,10 +726,7 @@ where
                     ))));
                     continue;
                 }
-                match file_handle
-                    .unwrap()
-                    .write_all(&file.file_content.as_bytes())
-                {
+                match file_handle.unwrap().write_all(file.file_content.as_bytes()) {
                     Ok(_) => {
                         logs.push(Ok(Success::new(
                             format!("Generated file {} for for this project.", &file.filename),
