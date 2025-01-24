@@ -1,6 +1,5 @@
 use std::{
-    io::{self, BufRead, BufReader, BufWriter, Read, Write},
-    os::windows::prelude::AsHandle,
+    io::{BufRead, BufReader, Write},
     process::{Command, Stdio},
     thread::park_timeout,
     time::Duration,
@@ -9,15 +8,14 @@ use std::{
 use diesel::SqliteConnection;
 
 use crate::{
-    database::{create_ssh, fetch_single_project, get_ssh},
+    database::{create_ssh, get_ssh},
     logger::{print, TablingOptionsBuilder},
-    models::SSHProjects,
 };
 
 pub fn ssh_into(
     conn: &mut SqliteConnection,
     new: &Option<String>,
-    name: &String,
+    name: &str,
     host: &Option<String>,
     user: &Option<String>,
     settings: &mut TablingOptionsBuilder,
@@ -26,11 +24,11 @@ pub fn ssh_into(
         Some(pw_name) => {
             let user_str = user.clone().unwrap();
             let host_str = host.clone().unwrap();
-            create_ssh(conn, &name, &pw_name, &user_str, &host_str)
+            create_ssh(conn, name, pw_name, &user_str, &host_str)
         }
-        None => get_ssh(conn, &name), //  let mut project = fetch_single_project(conn, &name);
-                                      // UserOrganization::belonging_to(&organizations)
-                                      // .inner_join(user::table)
+        None => get_ssh(conn, name), //  let mut project = fetch_single_project(conn, &name);
+                                     // UserOrganization::belonging_to(&organizations)
+                                     // .inner_join(user::table)
     };
     let mut table = tabled::Table::new(vec![ssh.clone()]);
     print(&mut table, settings);
@@ -56,11 +54,11 @@ pub fn ssh_into(
         .stdin
         .as_ref()
         .unwrap()
-        .write(&password.as_bytes())
+        .write_all(password.as_bytes())
         .unwrap();
     //  println!("wrote password");
     if let Some(ref mut stdout) = handle.stdout {
-        for line in BufReader::new(stdout).lines() {}
+        for _line in BufReader::new(stdout).lines() {}
         handle.wait().unwrap();
     }
     // let out = handle.stdout.unwrap();

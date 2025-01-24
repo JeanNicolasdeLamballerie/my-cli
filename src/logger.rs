@@ -48,7 +48,7 @@ impl TablingOptions {
                 "green" => green,
                 "magenta" => magenta,
                 "blue" => blue,
-                "default" | _ => default_colors,
+                _ => default_colors,
             },
             None => default_colors,
         }
@@ -56,13 +56,13 @@ impl TablingOptions {
 
     fn colors(&self) -> Vec<Color> {
         // Vec<Option<Color>> =
-        vec![&self.color, &self.first_row_color, &self.first_col_color]
+        [&self.color, &self.first_row_color, &self.first_col_color]
             .iter()
             .map(|color| self.get_color(color))
             .collect()
     }
 }
-pub fn print(table: &mut Table, opts: &mut TablingOptionsBuilder) -> () {
+pub fn print(table: &mut Table, opts: &mut TablingOptionsBuilder) {
     let e: TablingOptions = opts.build().unwrap();
     let colors = e.colors();
     let mut pre_tables: Vec<Table> = vec![];
@@ -112,9 +112,9 @@ pub fn print(table: &mut Table, opts: &mut TablingOptionsBuilder) -> () {
         .with(Colorization::exact(first_row_color, Rows::first()));
 
     for ele in pre_tables {
-        println!("{}", ele.to_string())
+        println!("{}", ele)
     }
-    println!("{}", table.to_string());
+    println!("{}", table);
     ///////////////////////////////////////////////
     // let color1 = Color::BG_BLACK | Color::FG_WHITE;
     // // let color2 = Color::BG_GREEN | Color::FG_BLACK;

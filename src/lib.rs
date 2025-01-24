@@ -1,7 +1,14 @@
+pub mod auth;
+pub mod config;
 pub mod database;
+pub mod editor;
+pub mod exceptions;
+pub mod fonts;
 pub mod logger;
 pub mod models;
 pub mod mover;
 pub mod run;
-pub mod ssh;
 pub mod schema;
+pub mod ssh;
+pub mod todos;
+mod ui;
