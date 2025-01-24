@@ -21,13 +21,13 @@ pub fn establish_connection() -> SqliteConnection {
     database_path.push(Path::new("projects.db"));
     let database_url: &str = database_path.to_str().unwrap();
     // env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    SqliteConnection::establish(&database_url)
+    SqliteConnection::establish(database_url)
         .unwrap_or_else(|_| panic!("Error connecting to database url..."))
 }
 
 use crate::models::{
-    CryptoData, FormattedTodo, Language, MasterUser, NewCryptoData, NewLanguage, NewMasterUser,
-    NewStoredSsh, ProjectWithLanguageName, Ssh,
+    CryptoData, Language, MasterUser, NewCryptoData, NewLanguage, NewMasterUser, NewStoredSsh,
+    ProjectWithLanguageName, Ssh,
 };
 
 use crate::schema::{crypto_data, languages, master_user, ssh, ssh_projects};
@@ -82,7 +82,7 @@ pub fn fetch_master_user(conn: &mut SqliteConnection) -> Option<MasterUser> {
     if u.len() > 1 {
         panic!("Your db is compromised. There is more than one super user.");
     }
-    if u.len() < 1 {
+    if u.is_empty() {
         return None;
     }
     Some(u[0].clone())
@@ -182,20 +182,16 @@ pub fn fetch_project_by_path(conn: &mut SqliteConnection, path: &str) -> Project
 }
 pub fn fetch_languages(conn: &mut SqliteConnection, language: &str) -> Vec<Language> {
     match language {
-        "all" | "a" => {
-            return languages::table
-                .select(Language::as_select())
-                .load(conn)
-                .expect("error handling language");
-        }
+        "all" | "a" => languages::table
+            .select(Language::as_select())
+            .load(conn)
+            .expect("error handling language"),
 
-        _ => {
-            return languages::table
-                .filter(languages::dsl::name.like(format!("%{language}%")))
-                .select(Language::as_select())
-                .load(conn)
-                .expect("error handling language");
-        }
+        _ => languages::table
+            .filter(languages::dsl::name.like(format!("%{language}%")))
+            .select(Language::as_select())
+            .load(conn)
+            .expect("error handling language"),
     }
 }
 
@@ -246,7 +242,7 @@ use crate::schema::todos;
 /// Should be updated with proper handling
 pub fn batch_create_todo(todos: &Vec<NewTodo>) -> usize {
     let mut conn = establish_connection();
-    if todos.len() == 0 {
+    if todos.is_empty() {
         return 0;
     }
     diesel::insert_into(todos::table)
@@ -260,7 +256,7 @@ pub fn batch_create_todo(todos: &Vec<NewTodo>) -> usize {
 pub fn batch_edit_todo(todo_list: Vec<UpdateTodo>) -> usize {
     // crate::schema::todos::table.filter
     let mut conn = establish_connection();
-    if todo_list.len() == 0 {
+    if todo_list.is_empty() {
         return 0;
     }
     for todo in todo_list.iter() {
@@ -298,22 +294,18 @@ pub fn update_todo(todo: UpdateTodo) -> usize {
 /// Inserts a single todo; returns it with it's Id.
 pub fn create_todo(todo: NewTodo) -> Todo {
     let mut conn = establish_connection();
-    let todo = diesel::insert_into(todos::table)
+    diesel::insert_into(todos::table)
         .values(&todo)
         .returning(Todo::as_returning())
         .get_result(&mut conn)
-        .expect("error saving todo");
-    todo
+        .expect("error saving todo")
 }
 
 pub fn delete_all_todos(project_id: &i32) {
     let mut conn = establish_connection();
     diesel::delete(todos::table.filter(todos::project_id.eq(project_id)))
         .execute(&mut conn)
-        .expect(&format!(
-            "Error deleting todos related to project {}",
-            project_id
-        ));
+        .unwrap_or_else(|_| (panic!("Error deleting todos related to project {}", project_id)));
 }
 
 /// Deletes a single todo for a given Todo ID.
@@ -321,7 +313,7 @@ pub fn delete_todo(id: &i32) {
     let mut conn = establish_connection();
     diesel::delete(todos::table.filter(todos::id.eq(id)))
         .execute(&mut conn)
-        .expect(&format!("Error deleting todo {}", id));
+        .unwrap_or_else(|_| (panic!("Error deleting todo {}", id)));
 }
 /// Returns a single todo for a given Todo ID.
 pub fn get_todo_id(id: i32) -> Todo {
@@ -360,11 +352,12 @@ pub fn create_ssh(
         host,
     };
     //   let project = fetch_single_project(conn, &project_name);
-    let ssh = diesel::insert_into(ssh::table)
+    // let ssh =
+    diesel::insert_into(ssh::table)
         .values(&new_ssh)
         .returning(Ssh::as_returning())
         .get_result(conn)
-        .expect("error saving ssh");
+        .expect("error saving ssh")
     // let new_proj_ssh = NewProjectSsh {
     //     ssh_id: &ssh.id,
     //     project_id: &project.id,
@@ -375,7 +368,7 @@ pub fn create_ssh(
     //     .get_result(conn)
     //     .expect("error inserting in ssh+proj");
 
-    ssh
+    // ssh
 }
 
 pub fn get_ssh(conn: &mut SqliteConnection, ssh_name: &str) -> Ssh {

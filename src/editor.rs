@@ -1,7 +1,7 @@
 //
 
 use crate::{
-    database::{self, Save},
+    database::{self},
     models::{FormattedTodo, NewTodo, UpdateTodo},
     todos::TodoId,
     ui::{DatabaseError, Success},
@@ -18,14 +18,9 @@ pub trait Modified {
 
 impl Modified for TodoEditor {
     fn is_modified(&self) -> bool {
-        if self.code != self.back_up
+        self.code != self.back_up
             || self.title != self.title_backup
             || self.subtitle != self.subtitle_backup
-        {
-            return true;
-        } else {
-            return false;
-        }
     }
     fn reset(&mut self) {
         self.subtitle = self.subtitle_backup.clone();
@@ -63,7 +58,7 @@ impl Default for TodoEditor {
 ";
         let title = "Default title";
         let id = TodoId::Stored(0);
-        let (name, gid) = extract_name_gid(&id, &title);
+        let (name, gid) = extract_name_gid(&id, title);
         Self {
             id,
             gid,
@@ -97,8 +92,10 @@ impl TodoEditor {
         self.name = name;
     }
     pub fn id_default(id: i32) -> Self {
-        let mut td = TodoEditor::default();
-        td.id = TodoId::Stored(id);
+        let mut td = TodoEditor {
+            id: TodoId::Stored(id),
+            ..Default::default()
+        };
 
         let (name, gid) = extract_name_gid(&td.id, &td.title);
         td.gid = gid;
@@ -113,15 +110,15 @@ impl TodoEditor {
         id: TodoId,
         project_id: i32,
     ) -> Self {
-        let (name, gid) = extract_name_gid(&id, &title);
+        let (name, gid) = extract_name_gid(&id, title);
         Self {
             project_id,
             id,
-            gid: gid.into(),
+            gid,
             language: language.into(),
             code: code.into(),
             back_up: code.into(),
-            name: name.into(),
+            name,
             title: title.into(),
             title_backup: title.into(),
             subtitle: subtitle.into(),
@@ -130,7 +127,7 @@ impl TodoEditor {
         }
     }
     pub fn title_str(&self) -> String {
-        String::from(format!("# {}\n\n## {}", self.title, self.subtitle))
+        format!("# {}\n\n## {}", self.title, self.subtitle)
     }
     pub fn to_display(&self) -> String {
         format!("{}\n\n{}", self.title_str(), self.code)
@@ -160,7 +157,7 @@ impl crate::database::Save<FormattedTodo> for TodoEditor {
             });
             Success::new(
                 format!(
-                    "Successfully updated todo ({}, id {}) successfully.",
+                    "Updated todo ({}, id {}) successfully.",
                     todo.title, todo.id
                 ),
                 crate::ui::SuccessType::Database,
@@ -174,14 +171,20 @@ impl crate::database::Save<FormattedTodo> for TodoEditor {
         self.into()
     }
 }
+const MAX_TRUNC_NAME: usize = 28;
 impl crate::ui::WindowUI for TodoEditor {
-    fn name(&self) -> &str {
-        &self.name
+    fn name_truncated(&self) -> String {
+        let mut name = self.name.clone();
+        name.truncate(MAX_TRUNC_NAME);
+        if self.name.len() > name.len() {
+            name += "...";
+        }
+        name
     }
 
-    fn show(&mut self, ctx: &egui::Context, open: &mut bool) {
+    fn _show(&mut self, ctx: &egui::Context, open: &mut bool) {
         use crate::ui::View as _;
-        egui::Window::new(self.name())
+        egui::Window::new(self.name_truncated())
             .open(open)
             .default_height(500.0)
             .show(ctx, |ui| self.ui(ui));

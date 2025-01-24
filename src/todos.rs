@@ -1,14 +1,13 @@
-//
+use std::{io::Write, ops::Deref, path};
 
-use std::{io::Write, ops::Deref, path, str::FromStr};
-
-use egui::{ahash::HashMapExt, Align, Color32, Pos2, RichText, ScrollArea, TextStyle};
+use egui::{text::LayoutJob, Color32, Pos2, RichText, ScrollArea};
 
 use crate::{
     database::{self, delete_all_todos, delete_todo, get_todos_for_proj, Save},
     editor::{Modified, TodoEditor},
+    fonts::{IconsCodePoints, FONTS},
     models::{FormattedTodo, NewTodo, Project, ProjectWithLanguageName, UpdateTodo},
-    ui::{DatabaseError, Log, Success,  WindowUI},
+    ui::{DatabaseError, Log, Success},
 };
 
 impl From<TodoEditor> for FormattedTodo {
@@ -82,7 +81,7 @@ struct MultipleFiles {
     selected: bool,
     files: Option<Vec<FileTodo>>,
     selection: Vec<bool>,
-    target_path : Option<std::path::PathBuf>,
+    target_path: Option<std::path::PathBuf>,
     path: String,
 }
 impl Default for TodoList {
@@ -116,16 +115,23 @@ impl Default for TodoList {
 impl eframe::App for TodoList {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         use crate::ui::View as _;
-        egui::TopBottomPanel::top(egui::Id::new("top_panel_todo_list"))
+        let mut style = ctx.style().deref().clone();
+        style.visuals.panel_fill =
+            Color32::from_hex("#141414").expect("Color creation should not fail.");
+        egui::TopBottomPanel::top(egui::Id::new("top_panel_todo_list")).frame(egui::Frame::side_top_panel(&style).inner_margin(5.))
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.label(RichText::new("Project Information").size(25.));
                 });
+
                 ui.horizontal(|ui| {
                     ui.allocate_ui_with_layout(
                         egui::Vec2 { x: 500., y: 500. },
                         egui::Layout::top_down(egui::Align::LEFT),
                         |ui| {
+                            egui::Frame::default().inner_margin(10.).rounding(2.)
+                                .stroke(egui::Stroke::new(2., Color32::from_hex("#1B1B1B").expect("Color creation should not fail.")))
+                                .show(ui, |ui|{
                             ui.label(String::from("Project Name : ") + &self.parent.name);
                             ui.label(String::from("Project Path : ") + &self.parent.path);
                             ui.label(
@@ -190,7 +196,7 @@ impl eframe::App for TodoList {
                                             if ui.button("Confirm deletion").clicked() {
                                                 delete_all_todos(&self.parent.id);
                                                 let r = Ok(Success::new(
-                                                    format!("Deleted all todos for this project.",),
+                                                    "Deleted all todos for this project.".to_string(),
                                                     crate::ui::SuccessType::Database,
                                                 ));
                                                 self.push_log(r);
@@ -201,7 +207,7 @@ impl eframe::App for TodoList {
                                             }
                                         },
                                     );
-                                    let response_file = ui.add_enabled(self.todos.len() > 0, egui::Button::new("Generate todo files"));
+                                    let response_file = ui.add_enabled(!self.todos.is_empty(), egui::Button::new("Generate todo files"));
 
                                     let file_popup_id = ui.make_persistent_id("GENERATE_FILES_POPUP");
                                    if response_file.clicked {
@@ -228,54 +234,86 @@ impl eframe::App for TodoList {
                                             });
                                             ui.separator();
                                             ui.vertical_centered(|ui| {
+                                            ui.horizontal(|ui| {
 
-                                           let e = ui.horizontal(|ui| {
+                                                    // Magic number : the measured size of the
+                                                    // frame is (344-14) and the total size of the
+                                                    // popup is 400. We end up with 35px on each
+                                                    // side.
+                                                    let padding = (x - 330.)/2.;
+                                                    ui.add_space(padding);
+                                                let frame = egui::Frame::group(ui.style()).fill(Color32::BLACK);
+                                                frame.show(ui,|ui| {
+
+
                                             if ui.button("Generate file from all todos").clicked() {
                                                 let r = self.replace_file();
                                                 self.push_log(r);
                                                 ui.memory_mut(|mem| mem.toggle_popup(file_popup_id));
-                                            };
-                                            ui.separator();
-                                            if ui.button("Generate multiple files").clicked() {
-                                                let path = &mut self.multiple_files.path;
-                                                if path == "" {
-                                                let parent_path = self.parent.path.clone();
-                                                let mut p = std::path::PathBuf::from(&parent_path).canonicalize().unwrap();
-                                                    p.push("todos");                                                    
-                                                            *path = p.to_str().unwrap_or("error loading the path...").into();
-                                                }
-                                                self.multiple_files.selected = true;
-                                            };
-                                            });
+                                                        };
+                                                        ui.separator();
+                                                        if ui.button("Generate multiple files").clicked() {
+                                                            let path = &mut self.multiple_files.path;
+                                                            if path.is_empty() {
+                                                                let parent_path = self.parent.path.clone();
+                                                                let mut p = std::path::PathBuf::from(&parent_path).canonicalize().unwrap();
+                                                                p.push("todos");                                                    
+                                                                *path = p.to_str().unwrap_or("error loading the path...").into();
+                                                            }
+                                                            self.multiple_files.selected = true;
+                                                        };
+                                                    });
+                                                });
+                                                // println!("{:?} {:?}",size.response.rect.min.x, size.response.rect.max.x);
                                             });
                                             if self.multiple_files.selection.len() != self.todos.len() {
                                                 self.multiple_files.selection = vec![false;self.todos.len()];
                                                 self.multiple_files.files = None;
                                             }
                                             if self.multiple_files.selected {
-                                                use crate::ui::WindowUI as _;
-                                                for (idx, todo) in self.todos.iter().enumerate() {
-                                                    let checked = &mut self.multiple_files.selection[idx];
-                                                    ui.checkbox(checked, todo.name());
-                                                }
-
+                                                        egui::Grid::new("CHECKBOXES_SAVE_MULTIPLE_FILES").min_col_width(x/2.).show(ui, |ui|{
+                                                            for (idx, todo) in self.todos.iter().enumerate() {
+                                                                let end = (idx+1)%2 == 0;
+                                                                let checked = &mut self.multiple_files.selection[idx];
+                                                                ui.vertical_centered(|ui| {
+                                                                ui.horizontal_wrapped(|ui| {
+                                                                        ui.checkbox(checked, &todo.name);
+                                                                    });
+                                                                });
+                                                                if end {
+                                                                    ui.end_row();
+                                                                }
+                                                            }
+                                                        });
                                                 ui.separator();
                                                 let path = &mut self.multiple_files.path;
                                                 let parent_path = self.parent.path.clone();
                                                 let mut p = std::path::PathBuf::from(&parent_path).canonicalize().unwrap();
                                                 p.push("todos");    
                                                let hint = RichText::new(p.to_str().unwrap_or("error loading the path...")).color(Color32::DARK_GRAY);
-
-                                                ui.label("The path to save your todos (defaults to your project's directory with a 'todo' folder) :");
+                                                let mut job = LayoutJob::default();
+                                                let text = IconsCodePoints::INFO;
+                                                job.append(&text.to_string(), 0.,
+                                                    egui::TextFormat {
+                                                        font_id: egui::FontId::new(22.0, FONTS::icons_family()),
+                                                        color: Color32::WHITE,
+                                                        ..Default::default()
+                                                    },
+                                                );
+                                                ui.vertical_centered(|ui| {
+                                                    ui.label(job).on_hover_ui(|ui| {
+                                                        ui.label("We will try resolving symlinks, relative paths, and other specifics. In a relative path, the current dir corresponds to the directory of the project (not your current directory). If it fails, consider using an absolute path.");
+                                                    });
+                                                });
+                                                ui.label("The path to save your todos (defaults to your project's directory with a 'todos' folder) :");
                                                 egui::TextEdit::singleline(path).hint_text(hint).show(ui);
-                                                if ui.add_enabled(self.multiple_files.selection.iter().any(|&x| x), egui::Button::new("generate multiple files")).clicked(){
+                                                if ui.add_enabled(self.multiple_files.selection.iter().any(|&x| x), egui::Button::new("generate multiple files").rounding(2.)).clicked(){
                                                     let mut todos = Vec::new();
                                                     for (idx, added) in self.multiple_files.selection.iter().enumerate() {
                                                         if *added {
                                                             todos.push(self.todos[idx].clone());
                                                         }
                                                     }
-                                                     
                                                     let base_path = std::path::PathBuf::from(&parent_path).canonicalize().unwrap();
                                                     let res =  handle_path(std::path::Path::new(&path).to_path_buf(), base_path);
                                     match res {
@@ -299,7 +337,7 @@ impl eframe::App for TodoList {
                                                         ui.label(txt);
                                                         ui.separator();
                                                     }
-                                                    if ui.button("Save all").clicked() {
+                                                    if ui.add(egui::Button::new("Save all").rounding(2.)).clicked() {
                                                         if let Some(path) = &self.multiple_files.target_path {
                                                                 if let Some(files) = &self.multiple_files.files {
                                                                    let logs = create_files(files, path);
@@ -315,7 +353,7 @@ impl eframe::App for TodoList {
                                                 }
                                             }
                                             ui.separator();
-                                            if ui.button("Cancel").clicked() {
+                                            if ui.add(egui::Button::new("Cancel").rounding(2.)).clicked() {
                                                 self.multiple_files = MultipleFiles::default();
                                                 ui.memory_mut(|mem| mem.toggle_popup(file_popup_id));
                                             }
@@ -324,11 +362,12 @@ impl eframe::App for TodoList {
                                 }
 
                                 _ => {
-                                    if ui.button("Swap to Edit").clicked() {
+                                    if ui.add(egui::Button::new("Swap to Edit").rounding(2.)).clicked() {
                                         self.state = TodoListState::EDIT;
                                     }
                                 }
                             }
+                            });
                         },
                     );
                     // ui.add(egui::Separator::default());
@@ -338,7 +377,6 @@ impl eframe::App for TodoList {
                     });
                 });
             });
-
         egui::CentralPanel::default().show(ctx, |ui| match self.state {
             TodoListState::VIEW => self.display(ui),
             TodoListState::EDIT => self.ui(ui),
@@ -378,25 +416,20 @@ impl TodoList {
         match file_path.canonicalize() {
             Ok(mut path) => {
                 path.push(file.filename);
-                match path.canonicalize() {
-                    Ok(p) => {
-                        let removed = std::fs::remove_file(p);
-                        if removed.is_err() {
-                            //FIXME make Error an enum
-                            //with either db or file
-                            return Err(DatabaseError::new(&removed.unwrap_err().to_string()));
-                        }
-                    }
-                    Err(_) => (),
+                if let Ok(p) = path.canonicalize() {
+                    let removed = std::fs::remove_file(p);
+                    if let Err(err) = removed {
+                        //FIXME make Error an enum
+                        //with either db or file
+                        return Err(DatabaseError::new(&err.to_string()));
+                    };
                 };
                 // FIXME remove unwrap here for file errors. Do this when a proper error enum
                 // exists
                 let mut file_handle = std::fs::File::create_new(path).unwrap();
-                file_handle
-                    .write_all(&file.file_content.as_bytes())
-                    .unwrap();
+                file_handle.write_all(file.file_content.as_bytes()).unwrap();
                 Ok(Success::new(
-                    format!("Generated file for all todos for this project.",),
+                    "Generated file for all todos for this project.".to_string(),
                     crate::ui::SuccessType::Database,
                 ))
             }
@@ -456,7 +489,7 @@ impl TodoList {
 impl crate::ui::View for TodoList {
     fn ui(&mut self, ui: &mut egui::Ui) {
         use crate::ui::WindowUI as _;
-        if self.remove.len() > 0 {
+        if !self.remove.is_empty() {
             for &idx in &self.remove {
                 self.todos.remove(idx);
             }
@@ -478,8 +511,7 @@ impl crate::ui::View for TodoList {
         let default_width = 400.0;
         let default_height = 500.0;
         let mut added_logs: Vec<Result<Success, DatabaseError>> = Vec::new();
-        let mut todo_index = 0;
-        for element in &mut self.todos {
+        for (todo_index, element) in &mut self.todos.iter_mut().enumerate() {
             let pos = if rows * x_delta > maximum.x - default_width {
                 columns += 1f32;
                 rows = 1f32;
@@ -491,7 +523,7 @@ impl crate::ui::View for TodoList {
             };
 
             element.modified = element.is_modified();
-            egui::Window::new(element.name())
+            egui::Window::new(element.name_truncated())
                 .id(egui::Id::new(&element.gid))
                 //TODO check for closing
                 //FIXME use the trait ("element.show()")
@@ -504,12 +536,12 @@ impl crate::ui::View for TodoList {
                 .max_height(maximum.y)
                 .show(ui.ctx(), |ui| {
                     element.ui(ui);
-                    if ui.button("Preview").clicked() {
+                    if ui.add(egui::Button::new("Preview").rounding(2.)).clicked() {
                         self.target = Some(element.clone());
                         self.state = TodoListState::VIEW;
                     }
                     if ui
-                        .add_enabled(element.modified, egui::Button::new("Save"))
+                        .add_enabled(element.modified, egui::Button::new("Save").rounding(2.))
                         .clicked()
                     {
                         let r = element.save_to_db();
@@ -546,9 +578,8 @@ impl crate::ui::View for TodoList {
                         }
                     };
                 });
-            todo_index += 1;
         }
-        if added_logs.len() > 0 {
+        if !added_logs.is_empty() {
             for log in added_logs {
                 self.push_log(log);
             }
@@ -650,12 +681,12 @@ where
                 }
             },
             None => {
-                let result = Err(DatabaseError::new(&format!("The path was fully unwinded and couldn't find a correct base directory(e.g, a drive).")));
+                let result = Err(DatabaseError::new("The path was fully unwinded and couldn't find a correct base directory(e.g, a drive)."));
                 break result;
             }
         }
     };
-    return result;
+    result
 }
 fn establish_path<Path>(
     leftovers: Vec<Option<path::Component>>,
@@ -667,53 +698,58 @@ where
     use std::path;
     let canonicalized_path = canonicalized_path.as_ref().to_path_buf();
     let mut create = path::PathBuf::new();
-    for element in leftovers.iter().rev() {
-        if let Some(component) = element {
-            create.push(component);
-        }
+    for component in leftovers.iter().rev().flatten() {
+        create.push(component);
     }
-    let final_path = canonicalized_path.join(create);
-    final_path
+    canonicalized_path.join(create)
 }
 
-fn create_files<Path>(files:&[FileTodo], path: Path) -> Vec<Result<Success, DatabaseError>> where Path: AsRef<std::path::Path> {
+fn create_files<Path>(files: &[FileTodo], path: Path) -> Vec<Result<Success, DatabaseError>>
+where
+    Path: AsRef<std::path::Path>,
+{
     use crate::ui::SuccessType;
 
     let result = std::fs::create_dir_all(&path);
-    let mut logs : Vec<Result<Success, DatabaseError>> = Vec::new();
+    let mut logs: Vec<Result<Success, DatabaseError>> = Vec::new();
     match result {
         Ok(_) => {
-            logs.push(Ok(Success::new(format!("The directory {} was successfully created.", path.as_ref().display()), SuccessType::File)));
+            logs.push(Ok(Success::new(
+                format!(
+                    "The directory {} was successfully created.",
+                    path.as_ref().display()
+                ),
+                SuccessType::File,
+            )));
             for file in files.iter() {
                 let path = path.as_ref().to_path_buf().join(&file.filename);
-                  match path.canonicalize() {
-                    Ok(p) => {
-                        let removed = std::fs::remove_file(p);
-                        if removed.is_err() {
-                            //FIXME make Error an enum
-                            //with either db or file
-                            logs.push(Err(DatabaseError::new(&removed.unwrap_err().to_string())));
-                            continue;
-                        }
-                    }
-                    Err(_) => (),
+                if let Ok(p) = path.canonicalize() {
+                    // Ok(p) => {
+                    let removed = std::fs::remove_file(p);
+                    if let Err(err) = removed {
+                        //FIXME make Error an enum
+                        //with either db or file
+                        logs.push(Err(DatabaseError::new(&err.to_string())));
+                        continue;
+                    };
                 };
                 let file_handle = std::fs::File::create_new(&path);
                 if let Err(err) = &file_handle {
-                    logs.push(Err(DatabaseError::new(&format!("An error occured creating the file : {}", &err.to_string()))));
+                    logs.push(Err(DatabaseError::new(&format!(
+                        "An error occured creating the file : {}",
+                        &err.to_string()
+                    ))));
                     continue;
                 }
-                match file_handle.unwrap()
-                    .write_all(&file.file_content.as_bytes()) {
-                        Ok(_) => {
+                match file_handle.unwrap().write_all(file.file_content.as_bytes()) {
+                    Ok(_) => {
                         logs.push(Ok(Success::new(
-                    format!("Generated file {} for for this project.", &file.filename),
-                    SuccessType::File,
-                )));
-                    },
+                            format!("Generated file {} for for this project.", &file.filename),
+                            SuccessType::File,
+                        )));
+                    }
                     Err(err) => {
                         logs.push(Err(DatabaseError::new(&err.to_string())));
-                    
                     }
                 };
             }

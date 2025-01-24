@@ -8,8 +8,8 @@ pub fn run_command(conn: &mut SqliteConnection, name: &Option<String>, command: 
     println!("{:?}, {:?}", name, command);
     match command {
         None => (),
-        Some(string) => {
-            let mut user_command = Command::new(command.as_ref().unwrap());
+        Some(_string) => {
+            let mut _user_command = Command::new(command.as_ref().unwrap());
             match name {
                 Some(string) => {
                     println!("{}", string);
@@ -22,14 +22,14 @@ pub fn run_command(conn: &mut SqliteConnection, name: &Option<String>, command: 
                     println!("No path, assuming the current directory as project directory");
                     let path = current_dir();
                     println!("path : {:?}", path);
-                    let proj = fetch_project_by_path(conn, path.unwrap().to_str().unwrap());
+                    let _proj = fetch_project_by_path(conn, path.unwrap().to_str().unwrap());
                     todo!();
                 }
             }
         }
     }
 
-    if name == &None && command == &None {}
+    // if name == &None && command == &None {}
     let mut user_command = Command::new(command.as_ref().unwrap());
     match name {
         Some(project) => {

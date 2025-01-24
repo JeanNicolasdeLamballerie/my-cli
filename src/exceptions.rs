@@ -6,22 +6,22 @@ pub struct Warning {
 }
 
 pub trait Action<T> {
-    fn action(&self) -> ();
+    fn action(&self);
 }
 
 pub trait HandleException {
-    fn warn(&self) -> ();
+    fn warn(&self);
 }
 
 impl Action<Warning> for Warning {
-    fn action(&self) -> () {
+    fn action(&self) {
         //TODO
         println!("Do some type specific db operation or other here...");
     }
 }
 
 impl HandleException for Warning {
-    fn warn(&self) -> () {
+    fn warn(&self) {
         println!("Warning :");
         println!("Message : {}", self.message);
         let mut proceed = true;

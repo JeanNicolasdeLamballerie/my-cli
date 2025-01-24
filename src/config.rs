@@ -7,7 +7,7 @@ pub struct MyConfig {
 /// `MyConfig` implements `Default`
 impl ::std::default::Default for MyConfig {
     fn default() -> Self {
-        return Self { version: 0 };
+        Self { version: 0 }
         // _ => error_default(),
     }
 }

@@ -1,12 +1,11 @@
-use humantime;
 use std::time::*;
 
 use egui::Align;
 
-///This trait should implement displaying errors or success.
-pub trait Feedback<T> {
-    fn process(&mut self, ui: &mut egui::Ui) -> ();
-}
+// ///This trait should implement displaying errors or success.
+// pub trait Feedback<T> {
+//     fn process(&mut self, ui: &mut egui::Ui) -> ();
+// }
 
 #[derive(Clone)]
 /// Struct holding the error (or success) values to display. Calling `.process`
@@ -109,6 +108,10 @@ impl Success {
 //     }
 // }
 
+// pub fn button(ui: &egui::Ui) {
+
+// }
+
 pub trait View {
     ///Transforms an element into a displayed menu or view in the egui context.
     fn ui(&mut self, ui: &mut egui::Ui);
@@ -116,15 +119,15 @@ pub trait View {
 
 /// Something to view
 pub trait WindowUI {
-    // `&'static` so we can also use it as a key to store open/close state.
-    fn name(&self) -> &str;
+    // A displayable name.
+    fn name_truncated(&self) -> String;
 
     /// Show windows, etc
-    fn show(&mut self, ctx: &egui::Context, open: &mut bool);
+    fn _show(&mut self, ctx: &egui::Context, open: &mut bool);
 }
 
 impl View for Log<Result<Success, DatabaseError>> {
-    fn ui(&mut self, ui: &mut egui::Ui) -> () {
+    fn ui(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             for log in &self.value {
                 match log {
@@ -132,9 +135,8 @@ impl View for Log<Result<Success, DatabaseError>> {
                         // s.timestamp.elapsed().unwrap();
                         // humantime::format_duration(s.timestamp.elapsed().unwrap());
                         let time = s.timestamp.elapsed().unwrap().as_secs();
-                        let time_display = (&format!("{}s", time))
-                            .parse::<humantime::Duration>()
-                            .unwrap();
+                        let time_display =
+                            format!("{}s", time).parse::<humantime::Duration>().unwrap();
 
                         //TODO add icon success / failure
                         ui.label(format!("[{} ago] - {}", time_display, s.message));
