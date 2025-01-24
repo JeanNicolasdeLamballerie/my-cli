@@ -19,7 +19,7 @@
 - [ ] maybe fix the position of windows on refresh (not sure what strategy to go for, could reset it)
 
 
-- [ ] minor but some bounding windows are too close to the buttons. Might need to use show_inside()
+- [ ] minor but some bounding windows are too close to the buttons.
 - [ ] add some color ?
 - [ ] maybe add a way to fold all the todos at once
 

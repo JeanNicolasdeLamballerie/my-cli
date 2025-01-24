@@ -108,6 +108,10 @@ impl Success {
 //     }
 // }
 
+// pub fn button(ui: &egui::Ui) {
+
+// }
+
 pub trait View {
     ///Transforms an element into a displayed menu or view in the egui context.
     fn ui(&mut self, ui: &mut egui::Ui);
@@ -115,8 +119,8 @@ pub trait View {
 
 /// Something to view
 pub trait WindowUI {
-    // `&'static` so we can also use it as a key to store open/close state.
-    fn name(&self) -> &str;
+    // A displayable name.
+    fn name_truncated(&self) -> String;
 
     /// Show windows, etc
     fn _show(&mut self, ctx: &egui::Context, open: &mut bool);

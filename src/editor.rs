@@ -171,14 +171,20 @@ impl crate::database::Save<FormattedTodo> for TodoEditor {
         self.into()
     }
 }
+const MAX_TRUNC_NAME: usize = 28;
 impl crate::ui::WindowUI for TodoEditor {
-    fn name(&self) -> &str {
-        &self.name
+    fn name_truncated(&self) -> String {
+        let mut name = self.name.clone();
+        name.truncate(MAX_TRUNC_NAME);
+        if self.name.len() > name.len() {
+            name += "...";
+        }
+        name
     }
 
     fn _show(&mut self, ctx: &egui::Context, open: &mut bool) {
         use crate::ui::View as _;
-        egui::Window::new(self.name())
+        egui::Window::new(self.name_truncated())
             .open(open)
             .default_height(500.0)
             .show(ctx, |ui| self.ui(ui));

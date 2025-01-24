@@ -1,4 +1,4 @@
-use std::{io::Write, path};
+use std::{io::Write, ops::Deref, path};
 
 use egui::{text::LayoutJob, Color32, Pos2, RichText, ScrollArea};
 
@@ -115,16 +115,23 @@ impl Default for TodoList {
 impl eframe::App for TodoList {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         use crate::ui::View as _;
-        egui::TopBottomPanel::top(egui::Id::new("top_panel_todo_list"))
+        let mut style = ctx.style().deref().clone();
+        style.visuals.panel_fill =
+            Color32::from_hex("#141414").expect("Color creation should not fail.");
+        egui::TopBottomPanel::top(egui::Id::new("top_panel_todo_list")).frame(egui::Frame::side_top_panel(&style).inner_margin(5.))
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.label(RichText::new("Project Information").size(25.));
                 });
+
                 ui.horizontal(|ui| {
                     ui.allocate_ui_with_layout(
                         egui::Vec2 { x: 500., y: 500. },
                         egui::Layout::top_down(egui::Align::LEFT),
                         |ui| {
+                            egui::Frame::default().inner_margin(10.).rounding(2.)
+                                .stroke(egui::Stroke::new(2., Color32::from_hex("#1B1B1B").expect("Color creation should not fail.")))
+                                .show(ui, |ui|{
                             ui.label(String::from("Project Name : ") + &self.parent.name);
                             ui.label(String::from("Project Path : ") + &self.parent.path);
                             ui.label(
@@ -229,12 +236,12 @@ impl eframe::App for TodoList {
                                             ui.vertical_centered(|ui| {
                                             ui.horizontal(|ui| {
 
-                                                //println!("{}", (x-(344-14))/2);
                                                     // Magic number : the measured size of the
                                                     // frame is (344-14) and the total size of the
                                                     // popup is 400. We end up with 35px on each
                                                     // side.
-                                                    ui.add_space(35.);
+                                                    let padding = (x - 330.)/2.;
+                                                    ui.add_space(padding);
                                                 let frame = egui::Frame::group(ui.style()).fill(Color32::BLACK);
                                                 frame.show(ui,|ui| {
 
@@ -264,12 +271,20 @@ impl eframe::App for TodoList {
                                                 self.multiple_files.files = None;
                                             }
                                             if self.multiple_files.selected {
-                                                use crate::ui::WindowUI as _;
-                                                for (idx, todo) in self.todos.iter().enumerate() {
-                                                    let checked = &mut self.multiple_files.selection[idx];
-                                                    ui.checkbox(checked, todo.name());
-                                                }
-
+                                                        egui::Grid::new("CHECKBOXES_SAVE_MULTIPLE_FILES").min_col_width(x/2.).show(ui, |ui|{
+                                                            for (idx, todo) in self.todos.iter().enumerate() {
+                                                                let end = (idx+1)%2 == 0;
+                                                                let checked = &mut self.multiple_files.selection[idx];
+                                                                ui.vertical_centered(|ui| {
+                                                                ui.horizontal_wrapped(|ui| {
+                                                                        ui.checkbox(checked, &todo.name);
+                                                                    });
+                                                                });
+                                                                if end {
+                                                                    ui.end_row();
+                                                                }
+                                                            }
+                                                        });
                                                 ui.separator();
                                                 let path = &mut self.multiple_files.path;
                                                 let parent_path = self.parent.path.clone();
@@ -290,9 +305,9 @@ impl eframe::App for TodoList {
                                                         ui.label("We will try resolving symlinks, relative paths, and other specifics. In a relative path, the current dir corresponds to the directory of the project (not your current directory). If it fails, consider using an absolute path.");
                                                     });
                                                 });
-                                                ui.label("The path to save your todos (defaults to your project's directory with a 'todo' folder) :");
+                                                ui.label("The path to save your todos (defaults to your project's directory with a 'todos' folder) :");
                                                 egui::TextEdit::singleline(path).hint_text(hint).show(ui);
-                                                if ui.add_enabled(self.multiple_files.selection.iter().any(|&x| x), egui::Button::new("generate multiple files")).clicked(){
+                                                if ui.add_enabled(self.multiple_files.selection.iter().any(|&x| x), egui::Button::new("generate multiple files").rounding(2.)).clicked(){
                                                     let mut todos = Vec::new();
                                                     for (idx, added) in self.multiple_files.selection.iter().enumerate() {
                                                         if *added {
@@ -322,7 +337,7 @@ impl eframe::App for TodoList {
                                                         ui.label(txt);
                                                         ui.separator();
                                                     }
-                                                    if ui.button("Save all").clicked() {
+                                                    if ui.add(egui::Button::new("Save all").rounding(2.)).clicked() {
                                                         if let Some(path) = &self.multiple_files.target_path {
                                                                 if let Some(files) = &self.multiple_files.files {
                                                                    let logs = create_files(files, path);
@@ -338,7 +353,7 @@ impl eframe::App for TodoList {
                                                 }
                                             }
                                             ui.separator();
-                                            if ui.button("Cancel").clicked() {
+                                            if ui.add(egui::Button::new("Cancel").rounding(2.)).clicked() {
                                                 self.multiple_files = MultipleFiles::default();
                                                 ui.memory_mut(|mem| mem.toggle_popup(file_popup_id));
                                             }
@@ -347,11 +362,12 @@ impl eframe::App for TodoList {
                                 }
 
                                 _ => {
-                                    if ui.button("Swap to Edit").clicked() {
+                                    if ui.add(egui::Button::new("Swap to Edit").rounding(2.)).clicked() {
                                         self.state = TodoListState::EDIT;
                                     }
                                 }
                             }
+                            });
                         },
                     );
                     // ui.add(egui::Separator::default());
@@ -361,7 +377,6 @@ impl eframe::App for TodoList {
                     });
                 });
             });
-
         egui::CentralPanel::default().show(ctx, |ui| match self.state {
             TodoListState::VIEW => self.display(ui),
             TodoListState::EDIT => self.ui(ui),
@@ -508,7 +523,7 @@ impl crate::ui::View for TodoList {
             };
 
             element.modified = element.is_modified();
-            egui::Window::new(element.name())
+            egui::Window::new(element.name_truncated())
                 .id(egui::Id::new(&element.gid))
                 //TODO check for closing
                 //FIXME use the trait ("element.show()")
@@ -521,12 +536,12 @@ impl crate::ui::View for TodoList {
                 .max_height(maximum.y)
                 .show(ui.ctx(), |ui| {
                     element.ui(ui);
-                    if ui.button("Preview").clicked() {
+                    if ui.add(egui::Button::new("Preview").rounding(2.)).clicked() {
                         self.target = Some(element.clone());
                         self.state = TodoListState::VIEW;
                     }
                     if ui
-                        .add_enabled(element.modified, egui::Button::new("Save"))
+                        .add_enabled(element.modified, egui::Button::new("Save").rounding(2.))
                         .clicked()
                     {
                         let r = element.save_to_db();
