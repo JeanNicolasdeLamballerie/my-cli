@@ -8,6 +8,7 @@
 - [x] add a view command. it should be as easy as "rush show todos"
 - I really need to figure out this "are we in a project or not" problem at the root...
 
+# General improvement
 
 # For the todo feature : 
 
@@ -22,8 +23,10 @@
 - [ ] minor but some bounding windows are too close to the buttons.
 - [ ] add some color ?
 - [ ] maybe add a way to fold all the todos at once
+- [ ] Make the editor scrollable.
 
 # SECURITY 
 
 - [x] ~~Swap the dash util to use pwsh for proper input sanitization (!!)~~
-- [ ] Swap to change_current_dir() instead (how did I miss this function ?)
+- [x] ~~Swap to change_current_dir() instead (how did I miss this function ?)~~
+- [x] I didn't miss it, change_current_dir() is only for the process. Updated to use Invoke-Expression on Powershell to avoid cmd injections
