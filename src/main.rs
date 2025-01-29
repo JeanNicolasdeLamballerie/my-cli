@@ -182,7 +182,12 @@ fn parse(warnings: Arc<Mutex<Vec<Warning>>>) {
                 language,
             } => {
                 let path_item = project_path.resolve();
-                match path_item.to_str() {
+                let abs = match std::path::absolute(&path_item) {
+                    Ok(absolute_path) => absolute_path,
+                    Err(err) => panic!("An error occured while processing the path : {}", err),
+                };
+
+                match abs.to_str() {
                     Some(val) => {
                         let prj = create_project(&mut conn, project_name, val, language);
                         let mut table = tabled::Table::new(vec![prj.clone()]);
@@ -242,6 +247,18 @@ fn parse(warnings: Arc<Mutex<Vec<Warning>>>) {
 }
 
 fn main() {
+    // use diesel::prelude::*;
+    // let projs = all_projects();
+    // let mut conn = establish_connection();
+    // for p in projs.iter() {
+    //     let path = std::path::absolute(&p.path).unwrap();
+    //     let path = path.to_str().unwrap();
+    //     // schema
+    //     diesel::update(schema::projects::table.filter(schema::projects::id.eq(p.id))) //.filter(schema::projects::dsl::id.eq(p.id)))
+    //         .set(crate::schema::projects::path.eq(path))
+    //         .execute(&mut conn)
+    //         .expect("error updating todo");
+    // }
     let warnings: Arc<Mutex<Vec<Warning>>> = Arc::new(Mutex::new(Vec::new()));
     // view();
     parse(warnings.clone());
