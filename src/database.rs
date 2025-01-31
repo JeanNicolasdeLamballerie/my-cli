@@ -6,11 +6,13 @@ use dotenvy::dotenv;
 use std::env;
 use std::path::Path;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
+pub const SEEDS_LAN: EmbeddedMigrations = embed_migrations!("./migrations/");
 pub const SEEDS_LANG: EmbeddedMigrations = embed_migrations!("./seeds/language");
 pub fn run_migration(conn: &mut SqliteConnection) {
     conn.run_pending_migrations(MIGRATIONS).unwrap(); //.run_pending_migrations(MIGRATIONS).unwrap();
     let langs = fetch_languages(conn, "a");
     if !langs.iter().any(|language| language.name == "none") {
+        // let has = conn.has_pending_migration(SEEDS_LANG).unwrap();
         conn.run_pending_migrations(SEEDS_LANG).unwrap();
     };
 }

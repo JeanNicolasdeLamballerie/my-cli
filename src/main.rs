@@ -321,7 +321,6 @@ fn open_todo(path: &Option<String>, todo_title: Option<&str>, warnings: Arc<Mute
             "Your Todos",
             options,
             Box::new(|cc| {
-                println!("adding icons...");
                 FONTS::add_rounded_icons(&cc.egui_ctx);
                 // This gives us image support:
                 // egui_extras::install_image_loaders(&cc.egui_ctx);

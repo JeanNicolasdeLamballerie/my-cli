@@ -43,7 +43,7 @@ impl From<&mut TodoEditor> for FormattedTodo {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TodoId {
     New(i32),
     Stored(i32),
@@ -73,7 +73,7 @@ pub struct TodoList {
     target: Option<TodoEditor>,
     log: Log<Result<Success, DatabaseError>>,
     refresh: bool,
-    remove: Vec<usize>,
+    remove: Vec<TodoId>,
     multiple_files: MultipleFiles,
 }
 #[derive(Default, Clone)]
@@ -490,9 +490,14 @@ impl crate::ui::View for TodoList {
     fn ui(&mut self, ui: &mut egui::Ui) {
         use crate::ui::WindowUI as _;
         if !self.remove.is_empty() {
-            for &idx in &self.remove {
-                self.todos.remove(idx);
-            }
+            // Remove the elements that match with the stored ids, then clean out the remove vector
+            self.todos = self
+                .todos
+                .iter()
+                .filter(|td| !self.remove.iter().any(|id| id == &td.id))
+                .cloned()
+                .collect();
+
             //FIXME Could be optimized by consuming, emptying and reusing the array instead.
             self.remove = Vec::new();
         }
@@ -511,7 +516,7 @@ impl crate::ui::View for TodoList {
         let default_width = 400.0;
         let default_height = 500.0;
         let mut added_logs: Vec<Result<Success, DatabaseError>> = Vec::new();
-        for (todo_index, element) in &mut self.todos.iter_mut().enumerate() {
+        for element in &mut self.todos.iter_mut() {
             let pos = if rows * x_delta > maximum.x - default_width {
                 columns += 1f32;
                 rows = 1f32;
@@ -523,6 +528,7 @@ impl crate::ui::View for TodoList {
             };
 
             element.modified = element.is_modified();
+
             egui::Window::new(element.name_truncated())
                 .id(egui::Id::new(&element.gid))
                 //TODO check for closing
@@ -545,13 +551,18 @@ impl crate::ui::View for TodoList {
                         .clicked()
                     {
                         let r = element.save_to_db();
+                        if r.is_ok() {
+                            if let TodoId::New(_) = element.id {
+                                self.remove.push(element.id.clone());
+                            }
+                        }
                         added_logs.push(r);
                     }
 
                     match element.id {
                         TodoId::New(id) => {
                             if ui.button("discard").clicked() {
-                                self.remove.push(todo_index);
+                                self.remove.push(element.id.clone());
                                 let r = Ok(Success::new(
                                     format!(
                                         "Discarded new Todo ({}, titled {} ) successfully.",
