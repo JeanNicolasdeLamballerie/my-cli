@@ -26,7 +26,25 @@ pub struct NewProject<'a> {
     pub path: &'a str,
     pub language_id: &'a i32,
 }
-
+#[derive(Tabled)]
+pub struct FormattedProject {
+    pub id: i32,
+    pub name: String,
+    pub path: String,
+    pub language_id: i32,
+    pub new: bool,
+}
+impl From<Project> for FormattedProject {
+    fn from(value: Project) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            path: value.path,
+            language_id: value.language_id,
+            new: false,
+        }
+    }
+}
 // --------------------------------------------------------
 // --------------------------------------------------------
 // --------------------------------------------------------

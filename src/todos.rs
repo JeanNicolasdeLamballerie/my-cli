@@ -13,8 +13,8 @@ use crate::{
 impl From<TodoEditor> for FormattedTodo {
     fn from(value: TodoEditor) -> Self {
         let (id, is_new) = match value.id {
-            TodoId::Stored(id) => (id, false),
-            TodoId::New(id) => (id, true),
+            StoredId::Stored(id) => (id, false),
+            StoredId::New(id) => (id, true),
         };
         FormattedTodo {
             id,
@@ -29,8 +29,8 @@ impl From<TodoEditor> for FormattedTodo {
 impl From<&mut TodoEditor> for FormattedTodo {
     fn from(value: &mut TodoEditor) -> Self {
         let (id, is_new) = match value.id {
-            TodoId::Stored(id) => (id, false),
-            TodoId::New(id) => (id, true),
+            StoredId::Stored(id) => (id, false),
+            StoredId::New(id) => (id, true),
         };
         FormattedTodo {
             id,
@@ -44,7 +44,7 @@ impl From<&mut TodoEditor> for FormattedTodo {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TodoId {
+pub enum StoredId {
     New(i32),
     Stored(i32),
 }
@@ -73,7 +73,7 @@ pub struct TodoList {
     target: Option<TodoEditor>,
     log: Log<Result<Success, DatabaseError>>,
     refresh: bool,
-    remove: Vec<TodoId>,
+    remove: Vec<StoredId>,
     multiple_files: MultipleFiles,
 }
 #[derive(Default, Clone)]
@@ -153,7 +153,7 @@ impl eframe::App for TodoList {
                                             "",
                                             "",
                                             "",
-                                            TodoId::New(self.new_todos),
+                                            StoredId::New(self.new_todos),
                                             self.parent.id,
                                         ))
                                     }
@@ -452,7 +452,7 @@ impl TodoList {
                 "An Error Occured",
                 "Try reloading the app...",
                 "**Could not open the todo...**",
-                TodoId::New(404),
+                StoredId::New(404),
                 self.parent.id,
             ))
             .clone();
@@ -471,8 +471,8 @@ impl TodoList {
             .clone()
             .into_iter()
             .filter(|td| match td.id {
-                TodoId::New(_) => true,
-                TodoId::Stored(_) => false,
+                StoredId::New(_) => true,
+                StoredId::Stored(_) => false,
             })
             .collect();
         let mut tds: Vec<TodoEditor> = todos.into_iter().map(|todo| todo.into()).collect();
@@ -552,7 +552,7 @@ impl crate::ui::View for TodoList {
                     {
                         let r = element.save_to_db();
                         if r.is_ok() {
-                            if let TodoId::New(_) = element.id {
+                            if let StoredId::New(_) = element.id {
                                 self.remove.push(element.id.clone());
                             }
                         }
@@ -560,7 +560,7 @@ impl crate::ui::View for TodoList {
                     }
 
                     match element.id {
-                        TodoId::New(id) => {
+                        StoredId::New(id) => {
                             if ui.button("discard").clicked() {
                                 self.remove.push(element.id.clone());
                                 let r = Ok(Success::new(
@@ -573,7 +573,7 @@ impl crate::ui::View for TodoList {
                                 added_logs.push(r);
                             }
                         }
-                        TodoId::Stored(id) => {
+                        StoredId::Stored(id) => {
                             if ui.button("delete").clicked() {
                                 delete_todo(&id);
                                 let r = Ok(Success::new(

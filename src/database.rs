@@ -225,16 +225,27 @@ pub fn create_project(
 }
 
 pub fn alter_project_path(id: &i32, path: &Path) -> Result<Success, DatabaseError> {
-    let mut conn = establish_connection();
+    let conn = &mut establish_connection();
     let resolved = std::path::absolute(path).unwrap();
     if let Err(err) = resolved.canonicalize() {
-        return Err(DatabaseError::new(err.to_string()));
+        return Err(DatabaseError::new(&err.to_string()));
     };
 
     diesel::update(projects::table.filter(projects::dsl::id.eq(id)))
         .set(projects::dsl::path.eq(resolved.to_str().expect(
         "This is not a valid utf8 path. Contact the developer if you actually need this feature",
-    )));
+    ))).execute(conn);
+    Ok(Success::new(
+        "Successfully edited the project's path.".into(),
+        crate::ui::SuccessType::Database,
+    ))
+}
+pub fn get_language(id: &i32) -> Language {
+    let conn = &mut establish_connection();
+    languages::table
+        .find(id)
+        .first(conn)
+        .expect("Invalid lang id")
 }
 pub fn get_language_by_name(conn: &mut SqliteConnection, name: &str) -> Language {
     //  use crate::schema::languages;
@@ -255,6 +266,7 @@ pub fn get_language_by_name(conn: &mut SqliteConnection, name: &str) -> Language
 
 use crate::models::{NewTodo, Todo, UpdateTodo};
 use crate::schema::todos;
+use crate::ui::{DatabaseError, Success};
 
 /// True batch create. Returns the number of rows affected.
 /// Should be updated with proper handling

@@ -3,7 +3,7 @@
 use crate::{
     database::{self},
     models::{FormattedTodo, NewTodo, UpdateTodo},
-    todos::TodoId,
+    todos::StoredId,
     ui::{DatabaseError, Success},
 };
 
@@ -36,7 +36,7 @@ impl Modified for TodoEditor {
 
 #[derive(Clone, Debug)]
 pub struct TodoEditor {
-    pub id: TodoId,
+    pub id: StoredId,
     pub project_id: i32,
     pub gid: String,
     pub language: String,
@@ -57,7 +57,7 @@ impl Default for TodoEditor {
 }\n\
 ";
         let title = "Default title";
-        let id = TodoId::Stored(0);
+        let id = StoredId::Stored(0);
         let (name, gid) = extract_name_gid(&id, title);
         Self {
             id,
@@ -77,13 +77,13 @@ impl Default for TodoEditor {
 }
 /// Formats a unique string (based on Id that shouldn't change... except when saving, but we can
 /// not change the gid... maybe) and a title for the window
-fn extract_name_gid(id: &TodoId, title: &str) -> (String, String) {
+fn extract_name_gid(id: &StoredId, title: &str) -> (String, String) {
     match id {
-        TodoId::New(number_id) => (
+        StoredId::New(number_id) => (
             format!("New [{}] - {}", number_id, title),
             format!("NEW-[{}]", number_id),
         ),
-        TodoId::Stored(id) => (format!("[{}] - {}", id, title), format!("[{}]", id)),
+        StoredId::Stored(id) => (format!("[{}] - {}", id, title), format!("[{}]", id)),
     }
 }
 impl TodoEditor {
@@ -93,7 +93,7 @@ impl TodoEditor {
     }
     pub fn id_default(id: i32) -> Self {
         let mut td = TodoEditor {
-            id: TodoId::Stored(id),
+            id: StoredId::Stored(id),
             ..Default::default()
         };
 
@@ -107,7 +107,7 @@ impl TodoEditor {
         title: &str,
         subtitle: &str,
         code: &str,
-        id: TodoId,
+        id: StoredId,
         project_id: i32,
     ) -> Self {
         let (name, gid) = extract_name_gid(&id, title);
@@ -269,7 +269,7 @@ impl From<crate::models::Todo> for TodoEditor {
             &value.title,
             &value.subtitle.unwrap_or("".into()),
             &value.content.unwrap_or("".into()),
-            TodoId::Stored(value.id),
+            StoredId::Stored(value.id),
             value.project_id,
         )
     }
@@ -277,9 +277,9 @@ impl From<crate::models::Todo> for TodoEditor {
 impl From<FormattedTodo> for TodoEditor {
     fn from(value: FormattedTodo) -> Self {
         let id = if value.new {
-            TodoId::New(value.id)
+            StoredId::New(value.id)
         } else {
-            TodoId::Stored(value.id)
+            StoredId::Stored(value.id)
         };
         Self::new(
             "md",

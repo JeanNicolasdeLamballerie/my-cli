@@ -8,7 +8,7 @@ use my_cli::exceptions::{HandleException, Warning};
 use my_cli::fonts::FONTS;
 use my_cli::models::ProjectWithLanguageName;
 use my_cli::mover::move_to;
-use my_cli::todos::{TodoId, TodoList};
+use my_cli::todos::{StoredId, TodoList};
 use my_cli::{
     database::{
         create_language, create_project, establish_connection, fetch_languages, fetch_projects,
@@ -313,7 +313,7 @@ fn open_todo(path: &Option<String>, todo_title: Option<&str>, warnings: Arc<Mute
         list.with_parent(project);
         list.retrieve();
         if let Some(title) = todo_title {
-            let todo = TodoEditor::new("md", title, "", "", TodoId::New(0), project.id);
+            let todo = TodoEditor::new("md", title, "", "", StoredId::New(0), project.id);
             list.add(todo);
         }
 

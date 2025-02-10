@@ -7,6 +7,7 @@ pub mod fonts;
 pub mod logger;
 pub mod models;
 pub mod mover;
+pub mod projects_ui;
 pub mod run;
 pub mod schema;
 pub mod ssh;
