@@ -1,5 +1,9 @@
 use std::{io::Write, ops::Deref, path};
 
+use diesel::{
+    r2d2::{ConnectionManager, Pool},
+    SqliteConnection,
+};
 use egui::{text::LayoutJob, Color32, Pos2, RichText, ScrollArea};
 
 use crate::{
@@ -66,6 +70,7 @@ pub struct FileTodo {
 }
 #[derive(Clone)]
 pub struct TodoList {
+    db_pool: Pool<ConnectionManager<SqliteConnection>>,
     todos: Vec<TodoEditor>,
     new_todos: i32,
     parent: ProjectWithLanguageName,
@@ -84,8 +89,8 @@ struct MultipleFiles {
     target_path: Option<std::path::PathBuf>,
     path: String,
 }
-impl Default for TodoList {
-    fn default() -> Self {
+impl TodoList {
+    pub fn default_state(pool: Pool<ConnectionManager<SqliteConnection>>) -> Self {
         let parent = ProjectWithLanguageName::new((
             Project {
                 id: 0,
@@ -96,6 +101,7 @@ impl Default for TodoList {
             "Some Language".into(),
         ));
         Self {
+            db_pool: pool,
             multiple_files: MultipleFiles::default(),
             refresh: false,
             parent,
@@ -158,8 +164,12 @@ impl eframe::App for TodoList {
                                         ))
                                     }
                                     if ui.button("Save all").clicked() {
-                                        let r = self.save_to_db();
+let connection = self.db_pool.get();
+                                                //TODO HANDLE POOL ERRORS
+                                                if let Ok(mut conn) = connection {
+                                         let r= self.save_to_db(&mut conn);
                                         self.push_log(r);
+                                                }
                                     }
                                     let response = ui.button("Delete all");
                                     let popup_id = ui.make_persistent_id("DELETE_ALL_POPUP");
@@ -194,12 +204,17 @@ impl eframe::App for TodoList {
                                                 });
                                             ui.separator();
                                             if ui.button("Confirm deletion").clicked() {
-                                                delete_all_todos(&self.parent.id);
+
+let connection = self.db_pool.get();
+                                                        if let Ok(mut conn) = connection {
+
+                                                delete_all_todos(&self.parent.id,&mut conn );
                                                 let r = Ok(Success::new(
                                                     "Deleted all todos for this project.".to_string(),
                                                     crate::ui::SuccessType::Database,
                                                 ));
                                                 self.push_log(r);
+                                                        }
                                                 ui.memory_mut(|mem| mem.toggle_popup(popup_id));
                                             }
                                             if ui.button("Cancel").clicked() {
@@ -264,7 +279,7 @@ impl eframe::App for TodoList {
                                                         };
                                                     });
                                                 });
-                                                // println!("{:?} {:?}",size.response.rect.min.x, size.response.rect.max.x);
+                                                // tcp_println!("{:?} {:?}",size.response.rect.min.x, size.response.rect.max.x);
                                             });
                                             if self.multiple_files.selection.len() != self.todos.len() {
                                                 self.multiple_files.selection = vec![false;self.todos.len()];
@@ -465,19 +480,22 @@ impl TodoList {
         self.todos.push(todo);
     }
     pub fn retrieve(&mut self) {
-        let todos = get_todos_for_proj(self.parent.id);
-        let mut added: Vec<TodoEditor> = self
-            .todos
-            .clone()
-            .into_iter()
-            .filter(|td| match td.id {
-                StoredId::New(_) => true,
-                StoredId::Stored(_) => false,
-            })
-            .collect();
-        let mut tds: Vec<TodoEditor> = todos.into_iter().map(|todo| todo.into()).collect();
-        tds.append(&mut added);
-        self.todos = tds;
+        let connection = self.db_pool.get();
+        if let Ok(mut conn) = connection {
+            let todos = get_todos_for_proj(self.parent.id, &mut conn);
+            let mut added: Vec<TodoEditor> = self
+                .todos
+                .clone()
+                .into_iter()
+                .filter(|td| match td.id {
+                    StoredId::New(_) => true,
+                    StoredId::Stored(_) => false,
+                })
+                .collect();
+            let mut tds: Vec<TodoEditor> = todos.into_iter().map(|todo| todo.into()).collect();
+            tds.append(&mut added);
+            self.todos = tds;
+        }
     }
 
     pub fn with_parent(&mut self, parent: &ProjectWithLanguageName) -> &mut Self {
@@ -550,13 +568,16 @@ impl crate::ui::View for TodoList {
                         .add_enabled(element.modified, egui::Button::new("Save").rounding(2.))
                         .clicked()
                     {
-                        let r = element.save_to_db();
-                        if r.is_ok() {
-                            if let StoredId::New(_) = element.id {
-                                self.remove.push(element.id.clone());
+                        let connection = self.db_pool.get();
+                        if let Ok(mut conn) = connection {
+                            let r = element.save_to_db(&mut conn);
+                            if r.is_ok() {
+                                if let StoredId::New(_) = element.id {
+                                    self.remove.push(element.id.clone());
+                                }
                             }
+                            added_logs.push(r);
                         }
-                        added_logs.push(r);
                     }
 
                     match element.id {
@@ -575,16 +596,19 @@ impl crate::ui::View for TodoList {
                         }
                         StoredId::Stored(id) => {
                             if ui.button("delete").clicked() {
-                                delete_todo(&id);
-                                let r = Ok(Success::new(
-                                    format!(
-                                        "Deleted Todo ({}, titled {} ) successfully.",
-                                        id, element.title
-                                    ),
-                                    crate::ui::SuccessType::Database,
-                                ));
+                                let connection = self.db_pool.get();
+                                if let Ok(mut conn) = connection {
+                                    delete_todo(&id, &mut conn);
+                                    let r = Ok(Success::new(
+                                        format!(
+                                            "Deleted Todo ({}, titled {} ) successfully.",
+                                            id, element.title
+                                        ),
+                                        crate::ui::SuccessType::Database,
+                                    ));
 
-                                added_logs.push(r);
+                                    added_logs.push(r);
+                                }
                             }
                         }
                     };
@@ -600,7 +624,7 @@ impl crate::ui::View for TodoList {
 
 //TODO error handling
 impl crate::database::Save<Vec<FormattedTodo>> for TodoList {
-    fn save_to_db(&mut self) -> Result<Success, DatabaseError> {
+    fn save_to_db(&mut self, conn: &mut SqliteConnection) -> Result<Success, DatabaseError> {
         let mut insert: Vec<NewTodo> = Vec::new();
         let mut edit = Vec::new();
         let saved = self.to_saved_format();
@@ -622,8 +646,8 @@ impl crate::database::Save<Vec<FormattedTodo>> for TodoList {
                 });
             }
         }
-        let rows = database::batch_create_todo(&insert);
-        let rows_update = database::batch_edit_todo(edit);
+        let rows = database::batch_create_todo(&insert, conn);
+        let rows_update = database::batch_edit_todo(edit, conn);
         Ok(Success::new(
             format!(
                 "Added {} todos and edited {} todos successfully.",

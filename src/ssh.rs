@@ -1,3 +1,4 @@
+use crate::tcp_println;
 use std::{
     io::{BufRead, BufReader, Write},
     process::{Command, Stdio},
@@ -47,8 +48,9 @@ pub fn ssh_into(
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
-    println!("{:?}", handle);
-    println!("password : {}", password);
+    // .wait();
+    tcp_println!("{:?}", handle);
+    tcp_println!("password : {}", password);
     park_timeout(Duration::from_millis(5000));
     handle
         .stdin
@@ -56,18 +58,20 @@ pub fn ssh_into(
         .unwrap()
         .write_all(password.as_bytes())
         .unwrap();
-    //  println!("wrote password");
+    //  tcp_println!("wrote password");
     if let Some(ref mut stdout) = handle.stdout {
         for _line in BufReader::new(stdout).lines() {}
+        handle.wait().unwrap();
+    } else {
         handle.wait().unwrap();
     }
     // let out = handle.stdout.unwrap();
     // for line in io::stdou {
-    //     println!("in : {:?}", line);
+    //     tcp_println!("in : {:?}", line);
     // }
 
     // for line in io::stdin().lines() {
-    //     println!("in : {:?}", line);
+    //     tcp_println!("in : {:?}", line);
     // }
     //  let mut stdin = handle.stdin.take().unwrap();
     //   loop {

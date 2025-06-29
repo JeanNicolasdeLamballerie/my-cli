@@ -1,5 +1,7 @@
 //
 
+use diesel::SqliteConnection;
+
 use crate::{
     database::{self},
     models::{FormattedTodo, NewTodo, UpdateTodo},
@@ -53,7 +55,7 @@ impl Default for TodoEditor {
     fn default() -> Self {
         let code = "// A very simple \n\n example
 *fn main()* {\n\
-\tprintln!(\"***Hello world!***\");\r\n\
+\ttcp_println!(\"***Hello world!***\");\r\n\
 }\n\
 ";
         let title = "Default title";
@@ -134,27 +136,33 @@ impl TodoEditor {
     }
 }
 impl crate::database::Save<FormattedTodo> for TodoEditor {
-    fn save_to_db(&mut self) -> Result<Success, DatabaseError> {
+    fn save_to_db(&mut self, conn: &mut SqliteConnection) -> Result<Success, DatabaseError> {
         let todo = self.to_saved_format();
         let result = if todo.new {
-            database::create_todo(NewTodo {
-                project_id: &todo.project_id,
-                title: &todo.title,
-                subtitle: Some(&todo.subtitle),
-                content: Some(&todo.content),
-            });
+            database::create_todo(
+                NewTodo {
+                    project_id: &todo.project_id,
+                    title: &todo.title,
+                    subtitle: Some(&todo.subtitle),
+                    content: Some(&todo.content),
+                },
+                conn,
+            );
             Success::new(
                 format!("Successfully created todo {}.", todo.title),
                 crate::ui::SuccessType::Database,
             )
         } else {
-            database::update_todo(UpdateTodo {
-                id: &todo.id,
-                project_id: &todo.project_id,
-                title: &todo.title,
-                subtitle: Some(&todo.subtitle),
-                content: Some(&todo.content),
-            });
+            database::update_todo(
+                UpdateTodo {
+                    id: &todo.id,
+                    project_id: &todo.project_id,
+                    title: &todo.title,
+                    subtitle: Some(&todo.subtitle),
+                    content: Some(&todo.content),
+                },
+                conn,
+            );
             Success::new(
                 format!(
                     "Updated todo ({}, id {}) successfully.",

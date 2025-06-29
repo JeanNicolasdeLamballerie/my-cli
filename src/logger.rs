@@ -70,25 +70,22 @@ pub fn print(table: &mut Table, opts: &mut TablingOptionsBuilder) {
     let first_row_color = [colors.get(1).unwrap().to_owned()];
     let first_col_color = [colors.last().unwrap().to_owned()];
 
-    match &e.header {
-        Some(header) => {
-            let mut header_build = Builder::default();
-            header_build.set_header([header]);
-            let mut header_table = header_build.build();
+    if let Some(header) = &e.header {
+        let mut header_build = Builder::default();
+        header_build.set_header([header]);
+        let mut header_table = header_build.build();
 
-            header_table
-                .with(Style::modern())
-                .with(
-                    Modify::new(Rows::first())
-                        .with(BorderColor::filled(Color::BG_BLACK | Color::FG_BLUE)),
-                )
-                //     .with(Border::new().corner_bottom_right("/"))
-                .with(Colorization::rows(default_color.clone()));
+        header_table
+            .with(Style::modern())
+            .with(
+                Modify::new(Rows::first())
+                    .with(BorderColor::filled(Color::BG_BLACK | Color::FG_BLUE)),
+            )
+            //     .with(Border::new().corner_bottom_right("/"))
+            .with(Colorization::rows(default_color.clone()));
 
-            pre_tables.push(header_table)
-        }
-        None => (),
-    }
+        pre_tables.push(header_table)
+    };
 
     table
         .with(Style::empty())
@@ -112,9 +109,9 @@ pub fn print(table: &mut Table, opts: &mut TablingOptionsBuilder) {
         .with(Colorization::exact(first_row_color, Rows::first()));
 
     for ele in pre_tables {
-        println!("{}", ele)
+        tcp_println!("{}", ele)
     }
-    println!("{}", table);
+    tcp_println!("{}", table);
     ///////////////////////////////////////////////
     // let color1 = Color::BG_BLACK | Color::FG_WHITE;
     // // let color2 = Color::BG_GREEN | Color::FG_BLACK;
@@ -123,3 +120,56 @@ pub fn print(table: &mut Table, opts: &mut TablingOptionsBuilder) {
 
     //   let _ =
 }
+
+use std::{path::PathBuf, time::SystemTime};
+
+use crate::{config, tcp_println};
+pub fn setup_logger() -> Result<(), fern::InitError> {
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "[{} {} {}] {}",
+                humantime::format_rfc3339_nanos(SystemTime::now()),
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Trace)
+        // .chain(std::io::stdout())
+        .chain(fern::log_file(get_log_path())?)
+        .chain(fern::Output::call({
+            let buf = crate::server::daemon::MESSAGES.clone();
+            move |record| {
+                buf.add_and_notify(record.args().to_string());
+            }
+        }))
+        .apply()?;
+    Ok(())
+}
+fn get_log_path() -> PathBuf {
+    let local = &config::data_dir().expect("Could not determine database path !");
+    match local.try_exists() {
+        Ok(exists) => {
+            if !exists {
+                std::fs::create_dir_all(local).unwrap();
+            }
+        }
+        Err(err) => panic!(
+            "An error occured while acquiring the local directories : {}",
+            err
+        ),
+    }
+    local.join("cli.log")
+}
+
+// fn main() -> Result<(), Box<dyn std::error::Error>> {
+//     setup_logger()?;
+//
+//     info!("Hello, world!");
+//     warn!("Warning!");
+//     debug!("Now exiting.");
+//
+//     Ok(())
+// }
+//

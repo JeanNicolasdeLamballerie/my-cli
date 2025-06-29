@@ -1,9 +1,16 @@
+use diesel::{
+    r2d2::{ConnectionManager, PooledConnection},
+    sqlite::Sqlite,
+    SqliteConnection,
+};
+use eframe::App;
+
 use crate::{
-    database::{self, establish_connection, get_language, Save},
+    database::{self, get_language, Save},
     editor::Modified,
     models::{FormattedProject, Language, Project},
     todos::StoredId,
-    ui::{DatabaseError, Success},
+    ui::{DatabaseError, Success, View},
 };
 use std::path::{Path, PathBuf};
 
@@ -107,12 +114,12 @@ impl Save<FormattedProject> for ProjectEditor {
     fn to_saved_format(&mut self) -> FormattedProject {
         self.into()
     }
-    fn save_to_db(&mut self) -> Result<Success, DatabaseError> {
+    fn save_to_db(&mut self, conn: &mut SqliteConnection) -> Result<Success, DatabaseError> {
         use Save as _;
         let project = self.to_saved_format();
         let result = if project.new {
             database::create_project(
-                &mut establish_connection(),
+                conn,
                 &self.project_name,
                 self.path.to_str().unwrap(),
                 &self.language.name,
@@ -175,30 +182,33 @@ impl crate::ui::View for ProjectEditor {
         } = self;
         ui.horizontal(|ui| {
             ui.set_height(0.0);
-            ui.label("Your todo...");
         });
 
-        ui.horizontal_wrapped(|ui| {
+        ui.vertical_centered(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
-            ui.label("Title");
             // ui.text_edit_singleline(path.into());
-            ui.label("Subtitle");
+            ui.label("Project Name");
             ui.text_edit_singleline(project_name);
-            // ui.label("Compile the demo with the ");
-            // ui.code("syntax_highlighting");
-            // ui.label(" feature to enable more accurate syntax highlighting using ");
-            // ui.hyperlink_to("syntect", "https://github.com/trishume/syntect");
-            // ui.label(".");
+            ui.separator();
+            ui.label("Project Language :");
+            ui.label(&language.name);
+            ui.separator();
+            ui.label("Path :");
+            ui.label(
+                path.to_str()
+                    .expect("This path is not a utf8 valid string."),
+            );
+            ui.separator();
         });
 
-        let mut theme =
-            egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
-        ui.collapsing("Theme", |ui| {
-            ui.group(|ui| {
-                theme.ui(ui);
-                theme.clone().store_in_memory(ui.ctx());
-            });
-        });
+        // let mut theme =
+        //     egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
+        // ui.collapsing("Theme", |ui| {
+        //     ui.group(|ui| {
+        //         theme.ui(ui);
+        //         theme.clone().store_in_memory(ui.ctx());
+        //     });
+        // });
 
         // let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
         //     let mut layout_job = egui_extras::syntax_highlighting::highlight(
@@ -228,18 +238,40 @@ impl crate::ui::View for ProjectEditor {
     }
 }
 
-impl From<Project> for ProjectEditor {
-    fn from(value: crate::models::Project) -> Self {
+impl
+    From<(
+        &mut PooledConnection<ConnectionManager<SqliteConnection>>,
+        Project,
+    )> for ProjectEditor
+{
+    fn from(
+        connection_and_project: (
+            &mut PooledConnection<ConnectionManager<SqliteConnection>>,
+            Project,
+        ),
+    ) -> Self {
+        let value = connection_and_project.1;
         Self::new(
             &PathBuf::from(value.path),
             &value.name,
-            &get_language(&value.id),
+            &get_language(&value.language_id, connection_and_project.0),
             StoredId::Stored(value.id),
         )
     }
 }
-impl From<FormattedProject> for ProjectEditor {
-    fn from(value: FormattedProject) -> Self {
+impl
+    From<(
+        &mut PooledConnection<ConnectionManager<SqliteConnection>>,
+        FormattedProject,
+    )> for ProjectEditor
+{
+    fn from(
+        connection_and_value: (
+            &mut PooledConnection<ConnectionManager<SqliteConnection>>,
+            FormattedProject,
+        ),
+    ) -> Self {
+        let value = connection_and_value.1;
         let id = if value.new {
             StoredId::New(value.id)
         } else {
@@ -248,7 +280,7 @@ impl From<FormattedProject> for ProjectEditor {
         Self::new(
             &PathBuf::from(value.path),
             &value.name,
-            &get_language(&value.id),
+            &get_language(&value.id, connection_and_value.0),
             id,
         )
     }
@@ -271,5 +303,15 @@ impl From<&mut ProjectEditor> for FormattedProject {
                 .into(),
             new,
         }
+    }
+}
+
+pub struct ProjectViewer(pub ProjectEditor);
+
+impl App for ProjectViewer {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            self.0.ui(ui);
+        });
     }
 }

@@ -1,4 +1,6 @@
 use std::io;
+
+use crate::tcp_println;
 pub struct Warning {
     message: String,
     confirmation: bool,
@@ -16,14 +18,14 @@ pub trait HandleException {
 impl Action<Warning> for Warning {
     fn action(&self) {
         //TODO
-        println!("Do some type specific db operation or other here...");
+        tcp_println!("Do some type specific db operation or other here...");
     }
 }
 
 impl HandleException for Warning {
     fn warn(&self) {
-        println!("Warning :");
-        println!("Message : {}", self.message);
+        tcp_println!("Warning :");
+        tcp_println!("Message : {}", self.message);
         let mut proceed = true;
         if self.confirmation {
             proceed = false;
@@ -44,7 +46,7 @@ impl HandleException for Warning {
 }
 
 fn get_input(prompt: &str) -> String {
-    println!("{}", prompt);
+    tcp_println!("{}", prompt);
     let mut input = String::new();
     match io::stdin().read_line(&mut input) {
         Ok(_goes_into_input_above) => {}
