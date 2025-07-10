@@ -1,3 +1,5 @@
+use log::Record;
+use once_cell::sync::OnceCell;
 use tabled::{
     builder::Builder,
     settings::{
@@ -14,7 +16,14 @@ use tabled::{
 // }
 
 use derive_builder::Builder as BuildStruct;
+use tokio::net::TcpStream;
 
+pub static ASYNC_STATUS: OnceCell<AsynchronousStatus> = OnceCell::new();
+#[derive(Clone, Debug)]
+pub enum AsynchronousStatus {
+    Available,
+    Unavailable,
+}
 #[derive(BuildStruct, Debug)]
 pub struct TablingOptions {
     color: Option<String>,
@@ -62,7 +71,11 @@ impl TablingOptions {
             .collect()
     }
 }
-pub fn print(table: &mut Table, opts: &mut TablingOptionsBuilder) {
+pub async fn print(
+    table: &mut Table,
+    opts: &mut TablingOptionsBuilder,
+    mut stream: &mut TcpStream,
+) {
     let e: TablingOptions = opts.build().unwrap();
     let colors = e.colors();
     let mut pre_tables: Vec<Table> = vec![];
@@ -109,9 +122,9 @@ pub fn print(table: &mut Table, opts: &mut TablingOptionsBuilder) {
         .with(Colorization::exact(first_row_color, Rows::first()));
 
     for ele in pre_tables {
-        tcp_println!("{}", ele)
+        tcp_log!(&mut stream => "{}", ele).await;
     }
-    tcp_println!("{}", table);
+    tcp_log!(stream => "{}", table).await;
     ///////////////////////////////////////////////
     // let color1 = Color::BG_BLACK | Color::FG_WHITE;
     // // let color2 = Color::BG_GREEN | Color::FG_BLACK;
@@ -121,10 +134,34 @@ pub fn print(table: &mut Table, opts: &mut TablingOptionsBuilder) {
     //   let _ =
 }
 
+use crate::{config, server::log_queue::LOG_QUEUE, tcp_log};
 use std::{path::PathBuf, time::SystemTime};
+pub fn setup_logger(status: AsynchronousStatus) -> Result<(), fern::InitError> {
+    let log_behavior = match ASYNC_STATUS.get() {
+        Some(sync_status) => {
+            match sync_status {
+                AsynchronousStatus::Available => move |record: &Record<'_>| {
+                    let line = record.args().to_string();
 
-use crate::{config, tcp_println};
-pub fn setup_logger() -> Result<(), fern::InitError> {
+                    tokio::spawn(async move {
+                        let buf = LOG_QUEUE.get().unwrap().clone();
+                        buf.push(line).await;
+                    });
+                },
+                AsynchronousStatus::Unavailable => move |record: &Record<'_>| {
+                    let line = record.args().to_string();
+                    // println!("{}",line);
+                    // tokio::spawn(async move {
+                    //     let buf = LOG_QUEUE.get().unwrap().clone();
+                    //     buf.push(line).await;
+                    // });
+                },
+            }
+        }
+        None => {
+            panic!("Async status is unset ? This should never happen.")
+        }
+    };
     fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!(
@@ -138,12 +175,37 @@ pub fn setup_logger() -> Result<(), fern::InitError> {
         .level(log::LevelFilter::Trace)
         // .chain(std::io::stdout())
         .chain(fern::log_file(get_log_path())?)
-        .chain(fern::Output::call({
-            let buf = crate::server::daemon::MESSAGES.clone();
+        .chain(fern::Output::call(
             move |record| {
-                buf.add_and_notify(record.args().to_string());
-            }
-        }))
+                match status {
+                    AsynchronousStatus::Available => {
+                        let line = record.args().to_string();
+
+                        tokio::spawn(async move {
+                            let buf = LOG_QUEUE.get().unwrap().clone();
+                            buf.push(line).await;
+                        });
+                    }
+                    AsynchronousStatus::Unavailable => {
+                        let line = record.args().to_string();
+                        // println!("{}",line);
+                        // tokio::spawn(async move {
+                        //     let buf = LOG_QUEUE.get().unwrap().clone();
+                        //     buf.push(line).await;
+                        // });
+                    }
+                }
+            }, // log_behavior
+               // |record| {
+               //
+               //     let line = record.args().to_string();
+               //
+               //     tokio::spawn(async move {
+               //         let buf = LOG_QUEUE.get().unwrap().clone();
+               //         buf.push(line).await;
+               //     });
+               // }
+        ))
         .apply()?;
     Ok(())
 }

@@ -1,4 +1,3 @@
-use crate::tcp_println;
 use std::{
     io::{BufRead, BufReader, Write},
     process::{Command, Stdio},
@@ -21,57 +20,58 @@ pub fn ssh_into(
     user: &Option<String>,
     settings: &mut TablingOptionsBuilder,
 ) {
-    let ssh = match new {
-        Some(pw_name) => {
-            let user_str = user.clone().unwrap();
-            let host_str = host.clone().unwrap();
-            create_ssh(conn, name, pw_name, &user_str, &host_str)
-        }
-        None => get_ssh(conn, name), //  let mut project = fetch_single_project(conn, &name);
-                                     // UserOrganization::belonging_to(&organizations)
-                                     // .inner_join(user::table)
-    };
-    let mut table = tabled::Table::new(vec![ssh.clone()]);
-    print(&mut table, settings);
-    if new.is_some() {
-        return;
-    }
-    let password = get_password(&ssh.pw_name);
-    let user = ssh.user;
-    let host = ssh.host;
-    let ssh_args = format!("{user}@{host}");
-    let mut handle = Command::new("ssh")
-        .arg("-t")
-        .arg("-t")
-        .arg(ssh_args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    // .wait();
-    tcp_println!("{:?}", handle);
-    tcp_println!("password : {}", password);
-    park_timeout(Duration::from_millis(5000));
-    handle
-        .stdin
-        .as_ref()
-        .unwrap()
-        .write_all(password.as_bytes())
-        .unwrap();
-    //  tcp_println!("wrote password");
-    if let Some(ref mut stdout) = handle.stdout {
-        for _line in BufReader::new(stdout).lines() {}
-        handle.wait().unwrap();
-    } else {
-        handle.wait().unwrap();
-    }
+    todo!("SSH into value");
+    // let ssh = match new {
+    //     Some(pw_name) => {
+    //         let user_str = user.clone().unwrap();
+    //         let host_str = host.clone().unwrap();
+    //         create_ssh(conn, name, pw_name, &user_str, &host_str)
+    //     }
+    //     None => get_ssh(conn, name), //  let mut project = fetch_single_project(conn, &name);
+    //                                  // UserOrganization::belonging_to(&organizations)
+    //                                  // .inner_join(user::table)
+    // };
+    // let mut table = tabled::Table::new(vec![ssh.clone()]);
+    // print(&mut table, settings);
+    // if new.is_some() {
+    //     return;
+    // }
+    // let password = get_password(&ssh.pw_name);
+    // let user = ssh.user;
+    // let host = ssh.host;
+    // let ssh_args = format!("{user}@{host}");
+    // let mut handle = Command::new("ssh")
+    //     .arg("-t")
+    //     .arg("-t")
+    //     .arg(ssh_args)
+    //     .stdin(Stdio::piped())
+    //     .stdout(Stdio::piped())
+    //     .spawn()
+    //     .unwrap();
+    // // .wait();
+    // tcp_log!(stream,"{:?}", handle);
+    // tcp_log!(stream,"password : {}", password);
+    // park_timeout(Duration::from_millis(5000));
+    // handle
+    //     .stdin
+    //     .as_ref()
+    //     .unwrap()
+    //     .write_all(password.as_bytes())
+    //     .unwrap();
+    // //  tcp_log!(stream,"wrote password");
+    // if let Some(ref mut stdout) = handle.stdout {
+    //     for _line in BufReader::new(stdout).lines() {}
+    //     handle.wait().unwrap();
+    // } else {
+    //     handle.wait().unwrap();
+    // }
     // let out = handle.stdout.unwrap();
     // for line in io::stdou {
-    //     tcp_println!("in : {:?}", line);
+    //     tcp_log!(stream,"in : {:?}", line);
     // }
 
     // for line in io::stdin().lines() {
-    //     tcp_println!("in : {:?}", line);
+    //     tcp_log!(stream,"in : {:?}", line);
     // }
     //  let mut stdin = handle.stdin.take().unwrap();
     //   loop {

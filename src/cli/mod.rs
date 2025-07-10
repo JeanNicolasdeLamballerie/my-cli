@@ -1,15 +1,15 @@
 use crate::database::{all_projects, run_migration, single_project, CryptoFilterType};
-use crate::server::daemon::{DaemonState, TCP_OUTPUT};
+use crate::fonts::FONTS;
+use crate::server::daemon::DaemonState;
+use crate::server::log_queue::handle_client;
 use crate::server::spawn;
 use clap::{Parser, Subcommand};
-use diesel::SqliteConnection;
-use egui::mutex::Mutex;
 use log::trace;
 // use my_cli::ssh::ssh_into;
 use crate::editor::TodoEditor;
-use crate::exceptions::Warning;
-use crate::fonts::FONTS;
-use crate::{auth, tcp_println};
+// use crate::exceptions::Warning;
+// use crate::fonts::FONTS;
+use crate::{auth, tcp_log};
 // use crate::logger::setup_logger;
 use crate::models::ProjectWithLanguageName;
 use crate::mover::move_to;
@@ -20,10 +20,7 @@ use crate::{
     logger::{self, print},
 };
 use resolve_path::PathResolveExt;
-use std::error::Error;
-use std::ffi::{OsStr, OsString};
-use std::future::Future;
-use std::io::{BufRead, BufReader};
+use std::ffi::OsString;
 // use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -38,7 +35,77 @@ pub enum EntryPoint {
         #[arg(long, default_value = "5339")]
         port: u16,
     },
-    Cli(Cli),
+    Cli(SynchronousCli),
+}
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+#[command(propagate_version = true)]
+pub struct SynchronousCli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+fn default_sync_msg() -> ActionResult {
+    println!("The synchronous CLI does not support this action.");
+    Err(())
+}
+
+impl SynchronousCli {
+    pub fn parse_to_action(&self, state: Arc<DaemonState>) -> ActionResult {
+        let cli = self;
+        let pool = state.database.clone();
+        let mut conn = match pool.get() {
+            Ok(conn) => conn,
+            Err(err) => return Err(()),
+        };
+        match &cli.command {
+            Commands::Add {
+                add_type: TypeOfAdds::Todo { todo_title, path },
+            } => {
+                open_todo(path, Some(todo_title), state);
+                Ok(())
+            }
+            Commands::Todo { action } => match action {
+                TodoActions::Show { path } => {
+                    open_todo(path, None, state);
+                    Ok(())
+                }
+                TodoActions::Add { todo_title, path } => {
+                    open_todo(path, Some(todo_title), state);
+                    Ok(())
+                }
+            },
+            Commands::Show {
+                searchterm,
+                lang_query: _,
+                gui: _,
+            } => {
+                let options = eframe::NativeOptions {
+                    viewport: egui::ViewportBuilder::default().with_maximized(true), //.with_inner_size([320.0, 240.0])
+                    renderer: eframe::Renderer::Glow,
+                    ..Default::default()
+                };
+                let p = single_project(&mut conn, searchterm);
+                let project: ProjectEditor = (&mut conn, p).into();
+                let viewer = ProjectViewer(project);
+                eframe::run_native(
+                    "Project Overview",
+                    options,
+                    Box::new(|cc| {
+                        crate::fonts::FONTS::add_rounded_icons(&cc.egui_ctx);
+                        // This gives us image support:
+                        // egui_extras::install_image_loaders(&cc.egui_ctx);
+
+                        Ok(Box::new(viewer))
+                    }),
+                )
+                .unwrap();
+                Ok(())
+            }
+            _ => default_sync_msg(),
+        }
+    }
 }
 
 /// 󰉊 Blazing fast project manager CLI 󰉊
@@ -157,7 +224,11 @@ pub type ActionResult = Result<(), ()>;
 
 impl Cli {
     // TODO : Fix that mess for run & SSH. Disabled for now.
-    pub fn parse_to_action(&self, state: Arc<DaemonState>, is_daemon: bool) -> ActionResult {
+    pub async fn parse_to_action(
+        &self,
+        state: Arc<DaemonState>,
+        mut stream: &mut tokio::net::TcpStream,
+    ) -> ActionResult {
         // let dt_start = chrono::Utc::now();
         let timestamp_start = SystemTime::now();
         let cli = self;
@@ -176,35 +247,7 @@ impl Cli {
         run_migration(&mut conn);
         match &cli.command {
             Commands::Attach => {
-                use std::io::Write;
-                crate::server::daemon::ENABLE_TCP.with_borrow(|is_enabled| {
-                    if *is_enabled {
-                        crate::server::daemon::TCP_OUTPUT.with_borrow_mut(|out| {
-                            loop {
-                                // let e = async {
-                                //
-                                //  };
-                                // Future::poll
-                                let buffer = crate::server::daemon::MESSAGES.clone();
-                                let mut buf = buffer.inner.lock().unwrap();
-                                while buf.is_empty() {
-                                    buf = buffer.wait(buf).unwrap();
-                                }
-                                // TODO: For now this only works for a single attached entity,
-                                // since we drain the buffer.
-                                while let Some(line) = buf.pop_front() {
-                                    if let Some(writer) = out {
-                                        // let mut reader =
-                                        //     BufReader::new(writer.try_clone().unwrap());
-                                        // let mut line_read = String::new();
-                                        // reader.read_line(&mut line_read);
-                                        let _ = writeln!(writer, "{}", line);
-                                    };
-                                }
-                            }
-                        });
-                    }
-                });
+                handle_client(stream).await;
             }
             Commands::Retrieve { host } => {
                 let key = auth::manager::requires_password(&mut conn);
@@ -216,26 +259,16 @@ impl Cli {
                 auth::manager::show_password(&cleartext).unwrap();
             }
             Commands::Store { host } => {
-                // tcp_tcp_println!("our host : {host}");
+                // tcp_tcp_log!(stream,"our host : {host}");
                 let key = auth::manager::requires_password(&mut conn);
                 let data = auth::manager::hidden_user_input(0);
                 auth::manager::store_encrypted(&data, host, &key, &mut conn);
             }
-            // Commands::Ssh {
-            //     new,
-            //     name,
-            //     user,
-            //     host,
-            //     // TODO : Generate the struct here. Messing up the argument order is too easy
-            //
-            // } => my_cli::ssh::ssh_into(&mut conn, new, name, host, user, settings),
-            // Commands::Move { name } => mover::move_to(&mut conn, name),
-            // Commands::Run { name, command } => run_command(&mut conn, name, command),
             Commands::Add { add_type } => match &add_type {
                 TypeOfAdds::Lang { language_name } => {
                     let lg = create_language(&mut conn, language_name);
                     let mut table = tabled::Table::new(vec![lg.clone()]);
-                    print(&mut table, settings);
+                    print(&mut table, settings, stream).await;
                 }
                 TypeOfAdds::Project {
                     project_path,
@@ -252,7 +285,7 @@ impl Cli {
                         Some(val) => {
                             let prj = create_project(&mut conn, project_name, val, language);
                             let mut table = tabled::Table::new(vec![prj.clone()]);
-                            print(&mut table, settings);
+                            print(&mut table, settings, stream).await;
                         }
                         None => {
                             panic!("No valid path");
@@ -260,75 +293,73 @@ impl Cli {
                     }
                 }
                 // TODO : add gui
-                TypeOfAdds::Todo { todo_title, path } => {
-                    if is_daemon {
-                        //TODO call self
-                        let args = self.command.to_args();
-                        spawn(args);
-                        return Ok(());
-                    };
-                    open_todo(path, Some(todo_title), &state);
+                TypeOfAdds::Todo {
+                    todo_title: _,
+                    path: _,
+                } => {
+                    //TODO call self
+                    let args = self.command.to_args();
+                    spawn(args);
+                    return Ok(());
                 }
             },
 
-            Commands::Move { name } => move_to(name, &mut conn),
+            Commands::Move { name } => move_to(name, &mut conn, stream).await,
             //TODO add gui
             Commands::Todo { action } => match action {
-                TodoActions::Show { path } => {
-                    if is_daemon {
-                        //TODO call self
-                        let args = self.command.to_args();
-                        spawn(args);
-                        return Ok(());
-                    };
-
-                    open_todo(path, None, &state);
+                TodoActions::Show { path: _ } => {
+                    //TODO call self
+                    let args = self.command.to_args();
+                    tcp_log!(stream => "{}", "properly entered the spawning phase...").await;
+                    spawn(args);
+                    return Ok(());
                 }
-                TodoActions::Add { todo_title, path } => {
-                    if is_daemon {
-                        //TODO call self
-                        let args = self.command.to_args();
-                        spawn(args);
-                        return Ok(());
-                    };
-
-                    open_todo(path, Some(todo_title), &state);
+                TodoActions::Add {
+                    todo_title: _,
+                    path: _,
+                } => {
+                    //TODO call self
+                    let args = self.command.to_args();
+                    spawn(args);
+                    return Ok(());
                 }
             },
 
-            //ADD GUI
+            // FIX: FIX GUI ? This can't query languages with the gui flag
             Commands::Show {
                 searchterm,
                 lang_query,
                 gui,
             } => {
                 if *gui {
-                    if is_daemon {
-                        //TODO call self
-                        let args = self.command.to_args();
-                        spawn(args);
-                        return Ok(());
-                    };
-                    let options = eframe::NativeOptions {
-                        viewport: egui::ViewportBuilder::default().with_maximized(true), //.with_inner_size([320.0, 240.0])
-                        renderer: eframe::Renderer::Glow,
-                        ..Default::default()
-                    };
-                    let p = single_project(&mut conn, searchterm);
-                    let project: ProjectEditor = (&mut conn, p).into();
-                    let viewer = ProjectViewer(project);
-                    eframe::run_native(
-                        "Project Overview",
-                        options,
-                        Box::new(|cc| {
-                            FONTS::add_rounded_icons(&cc.egui_ctx);
-                            // This gives us image support:
-                            // egui_extras::install_image_loaders(&cc.egui_ctx);
-
-                            Ok(Box::new(viewer))
-                        }),
-                    )
-                    .unwrap();
+                    let args = self.command.to_args();
+                    spawn(args);
+                    // if is_daemon {
+                    //     //TODO call self
+                    //     let args = self.command.to_args();
+                    //     spawn(args);
+                    //     return Ok(());
+                    // };
+                    // let options = eframe::NativeOptions {
+                    //     viewport: egui::ViewportBuilder::default().with_maximized(true), //.with_inner_size([320.0, 240.0])
+                    //     renderer: eframe::Renderer::Glow,
+                    //     ..Default::default()
+                    // };
+                    // let p = single_project(&mut conn, searchterm);
+                    // let project: ProjectEditor = (&mut conn, p).into();
+                    // let viewer = ProjectViewer(project);
+                    // eframe::run_native(
+                    //     "Project Overview",
+                    //     options,
+                    //     Box::new(|cc| {
+                    //         FONTS::add_rounded_icons(&cc.egui_ctx);
+                    //         // This gives us image support:
+                    //         // egui_extras::install_image_loaders(&cc.egui_ctx);
+                    //
+                    //         Ok(Box::new(viewer))
+                    //     }),
+                    // )
+                    // .unwrap();
                     // return Ok(());
                 }
                 if *lang_query {
@@ -340,7 +371,9 @@ impl Cli {
                         settings.clone().header(Some(
                             format!("Language query result : {} language(s)", length).to_string(),
                         )),
-                    );
+                        stream,
+                    )
+                    .await;
                 } else {
                     let projects = fetch_projects(&mut conn, searchterm);
                     let length = projects.len();
@@ -350,10 +383,11 @@ impl Cli {
                         settings.clone().header(Some(
                             format!("Project query result : {} project(s)", length).to_string(),
                         )),
-                    );
+                        stream,
+                    )
+                    .await;
                 }
-            }
-            _ => tcp_println!("Unsupported command..."),
+            } // _ => tcp_log!(stream => "Unsupported command...").await,
         }
 
         //  let dt_end = chrono::Utc::now();
@@ -361,9 +395,11 @@ impl Cli {
         let duration = timestamp_end.duration_since(timestamp_start).unwrap();
         match &cli.command {
             Commands::Move { name: _ } => {
-                trace!("Total query time : {} ms.", (duration.as_millis()))
+                trace!("Total query time : {} ms.", (duration.as_millis()));
             }
-            _ => tcp_println!("Total query time : {} ms.", (duration.as_millis())),
+            _ => {
+                tcp_log!(&mut stream => "Total query time : {} ms.", (duration.as_millis())).await;
+            }
         };
         Ok(())
     }
@@ -372,9 +408,10 @@ impl Cli {
 fn open_todo(
     path: &Option<String>,
     todo_title: Option<&str>,
-    state: &DaemonState,
+    state: Arc<DaemonState>,
     // warnings: &Mutex<Vec<Warning>>,
 ) {
+    trace!("getting to the todo...");
     let warnings = &state.warnings;
     let current = std::env::current_dir().unwrap();
     let mut target_proj: Option<&ProjectWithLanguageName> = None;
@@ -386,7 +423,7 @@ fn open_todo(
                 .canonicalize()
                 .expect("The path should support being canonicalized."),
             Err(err) => {
-                tcp_println!("Err ----------- \n {}", err);
+                tcp_log!("Err ----------- \n {}", err);
                 panic!("An error occured. The path provided is invalid.");
             }
         },
@@ -413,8 +450,8 @@ fn open_todo(
             Err(_err) => {
                 let msg = format!("The path {} cannot be found. Consider removing or disabling the project ({}) ...", &project.path, project.name);
 
-                // TODO remove unwrap
-                warnings.lock().unwrap().push(Warning::new(&msg, true))
+                // FIX: Fix the mutex
+                // warnings.lock().unwrap().push(Warning::new(&msg, true))
             }
         };
     }

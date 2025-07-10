@@ -13,7 +13,7 @@ impl ::std::default::Default for MyConfig {
 }
 
 // fn error_default() -> MyConfig {
-//     etcp_println!("An error occured while generating the configuration file.");
+//     etcp_log!(stream,"An error occured while generating the configuration file.");
 //     return MyConfig {
 //         version: 0,
 //     };

@@ -55,7 +55,7 @@ impl Default for TodoEditor {
     fn default() -> Self {
         let code = "// A very simple \n\n example
 *fn main()* {\n\
-\ttcp_println!(\"***Hello world!***\");\r\n\
+\tprintln!(\"***Hello world!***\");\r\n\
 }\n\
 ";
         let title = "Default title";

@@ -279,7 +279,6 @@ let connection = self.db_pool.get();
                                                         };
                                                     });
                                                 });
-                                                // tcp_println!("{:?} {:?}",size.response.rect.min.x, size.response.rect.max.x);
                                             });
                                             if self.multiple_files.selection.len() != self.todos.len() {
                                                 self.multiple_files.selection = vec![false;self.todos.len()];

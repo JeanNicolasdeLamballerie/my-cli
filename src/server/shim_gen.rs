@@ -1,20 +1,20 @@
 use std::fs;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::{config, tcp_println};
-
-/// Render the shims into config_dir/dekharen-cli-daemon/shims.{psm1,sh}
-///
-/// `exe_path`: Path to the actual executable (e.g., from std::env::current_exe())
+use crate::{config, tcp_log};
 
 pub fn shims_exist() -> io::Result<bool> {
     let has_ps1 = crate::config::shims_ps_path()?.exists();
     let has_sh = crate::config::shims_sh_path()?.exists();
     Ok(has_ps1 && has_sh)
 }
+
+/// Render the shims into config_dir/dekharen-cli-daemon/shims.{psm1,sh}
+///
+/// `exe_path`: Path to the actual executable (e.g., from std::env::current_exe())
 pub fn generate_shims(exe_path: &Path) -> io::Result<()> {
-    let mut port_path = crate::config::port_file_path();
+    let port_path = crate::config::port_file_path();
     // let config_dir = config_path().unwrap(); // TODO : Remove unwrap
     let exe_path_str = exe_path.to_string_lossy();
 
@@ -148,14 +148,14 @@ pub fn generate_completions(cli_command: &mut clap::Command) -> io::Result<()> {
 pub fn print_completion_instructions() {
     if let Some(config_dir) = dirs::config_dir() {
         let base = config_dir.join("dekharen-cli-daemon/completions");
-        tcp_println!("\n🔧 To enable tab-completion, add this to your configuration :\n");
+        tcp_log!("\n🔧 To enable tab-completion, add this to your configuration :\n");
 
-        tcp_println!("  Bash:\n    source {}", base.join("rush.bash").display());
-        tcp_println!(
+        tcp_log!("  Bash:\n    source {}", base.join("rush.bash").display());
+        tcp_log!(
             "\n  Zsh:\n    fpath=({} $fpath)\n    autoload -Uz compinit && compinit",
             base.display()
         );
-        tcp_println!(
+        tcp_log!(
             "\n  PowerShell:\n    Import-Module {}",
             base.join("_rush.ps1").display()
         );

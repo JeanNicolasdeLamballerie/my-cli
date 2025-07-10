@@ -10,7 +10,7 @@ use std::str;
 use crate::{
     database::{self, CryptoFilterType},
     models::{CryptoData, MasterUser},
-    tcp_println,
+    tcp_log,
 };
 use egui;
 
@@ -74,7 +74,7 @@ impl eframe::App for MyEguiApp {
 pub fn requires_password(conn: &mut SqliteConnection) -> [u8; 32] {
     let password = rpassword::prompt_password("Your password: ").unwrap();
     let key = verify_master_password(conn, password);
-    tcp_println!("your key : {:?}", key);
+    tcp_log!("your key : {:?}", key);
     key
 }
 
@@ -85,7 +85,7 @@ pub fn hidden_user_input(depth: u8) -> String {
         if depth > 5 {
             panic!("seriously, what are you doing ? Make sure both of the data entered are correct...:D ");
         }
-        tcp_println!("passwords didnt' match. Try again.");
+        tcp_log!("passwords didnt' match. Try again.");
         return hidden_user_input(depth + 1);
     }
     data
@@ -97,7 +97,7 @@ fn make_master_pw(depth: u8) -> String {
         if depth > 5 {
             panic!("seriously, what are you doing ? Make sure both passwords are correct... :D ");
         }
-        tcp_println!("passwords didnt' match. Try again.");
+        tcp_log!("passwords didnt' match. Try again.");
         return make_master_pw(depth + 1);
     }
     password
@@ -106,23 +106,23 @@ fn make_master_pw(depth: u8) -> String {
 fn create_master_password(conn: &mut SqliteConnection) -> MasterUser {
     use colored::Colorize;
 
-    tcp_println!(
+    tcp_log!(
         "{}",
         "---------You've just run an authenticated command without a user registered.---------"
             .blue()
             .bold()
     );
-    tcp_println!(
+    tcp_log!(
         "{}",
         "---------Starting the password setting process.---------"
             .blue()
             .bold()
     );
-    tcp_println!("{}", "---------------------------------".red().bold());
-    tcp_println!("{}", " BE CAREFUL ".red().bold().underline());
-    tcp_println!("{}", "---------------------------------".red().bold());
-    tcp_println!("This password will only be created once. It is a master password, and needs to be secure; it cannot be retrieved. Don't forget it, and no bad passwords !");
-    tcp_println!(
+    tcp_log!("{}", "---------------------------------".red().bold());
+    tcp_log!("{}", " BE CAREFUL ".red().bold().underline());
+    tcp_log!("{}", "---------------------------------".red().bold());
+    tcp_log!("This password will only be created once. It is a master password, and needs to be secure; it cannot be retrieved. Don't forget it, and no bad passwords !");
+    tcp_log!(
         "{}",
         "--------------Setting your master password-----------------"
             .blue()
@@ -198,7 +198,7 @@ pub fn decrypt(data: &[u8], key: &[u8; 32], nonce: Nonce) -> String {
             // Do what you need to with the decrypted password
         }
         Err(e) => {
-            tcp_println!("{e}");
+            tcp_log!("{e}");
             // Oh no-an attacker tampered with the encrypted password
             panic!("An attacker might have tempered with the encrypted passwords file. Consider taking appropriate actions.")
         }
