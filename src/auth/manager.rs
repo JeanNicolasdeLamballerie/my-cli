@@ -8,8 +8,9 @@ use diesel::SqliteConnection;
 use std::str;
 
 use crate::{
-    database::{self, establish_connection, CryptoFilterType},
+    database::{self, CryptoFilterType},
     models::{CryptoData, MasterUser},
+    tcp_log,
 };
 use egui;
 
@@ -22,11 +23,12 @@ const NL: &str = "\r\n";
 pub fn show_password(pw: &str) -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([320.0, 240.0]),
+        renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
 
     eframe::run_native(
-        "My egui App",
+        "Showing Password",
         options,
         Box::new(|cc| {
             // This gives us image support:
@@ -72,7 +74,7 @@ impl eframe::App for MyEguiApp {
 pub fn requires_password(conn: &mut SqliteConnection) -> [u8; 32] {
     let password = rpassword::prompt_password("Your password: ").unwrap();
     let key = verify_master_password(conn, password);
-    println!("your key : {:?}", key);
+    tcp_log!("your key : {:?}", key);
     key
 }
 
@@ -83,10 +85,10 @@ pub fn hidden_user_input(depth: u8) -> String {
         if depth > 5 {
             panic!("seriously, what are you doing ? Make sure both of the data entered are correct...:D ");
         }
-        println!("passwords didnt' match. Try again.");
+        tcp_log!("passwords didnt' match. Try again.");
         return hidden_user_input(depth + 1);
     }
-    return data;
+    data
 }
 fn make_master_pw(depth: u8) -> String {
     let password = rpassword::prompt_password("Enter master password: ").unwrap();
@@ -95,32 +97,32 @@ fn make_master_pw(depth: u8) -> String {
         if depth > 5 {
             panic!("seriously, what are you doing ? Make sure both passwords are correct... :D ");
         }
-        println!("passwords didnt' match. Try again.");
+        tcp_log!("passwords didnt' match. Try again.");
         return make_master_pw(depth + 1);
     }
-    return password;
+    password
 }
 
-fn create_master_password() -> MasterUser {
+fn create_master_password(conn: &mut SqliteConnection) -> MasterUser {
     use colored::Colorize;
 
-    println!(
+    tcp_log!(
         "{}",
         "---------You've just run an authenticated command without a user registered.---------"
             .blue()
             .bold()
     );
-    println!(
+    tcp_log!(
         "{}",
         "---------Starting the password setting process.---------"
             .blue()
             .bold()
     );
-    println!("{}", "---------------------------------".red().bold());
-    println!("{}", " BE CAREFUL ".red().bold().underline());
-    println!("{}", "---------------------------------".red().bold());
-    println!("This password will only be created once. It is a master password, and needs to be secure; it cannot be retrieved. Don't forget it, and no bad passwords !");
-    println!(
+    tcp_log!("{}", "---------------------------------".red().bold());
+    tcp_log!("{}", " BE CAREFUL ".red().bold().underline());
+    tcp_log!("{}", "---------------------------------".red().bold());
+    tcp_log!("This password will only be created once. It is a master password, and needs to be secure; it cannot be retrieved. Don't forget it, and no bad passwords !");
+    tcp_log!(
         "{}",
         "--------------Setting your master password-----------------"
             .blue()
@@ -140,7 +142,7 @@ fn create_master_password() -> MasterUser {
             panic!("An error occured while hashing the password. See below : {NL} {error}")
         }
     };
-    store_master_password(&password_hash)
+    store_master_password(&password_hash, conn)
 }
 
 fn verify_master_password(conn: &mut SqliteConnection, cipher_pass: String) -> [u8; 32] {
@@ -171,16 +173,15 @@ fn verify_master_password(conn: &mut SqliteConnection, cipher_pass: String) -> [
     key_val
 }
 
-fn store_master_password(phc_string: &str) -> MasterUser {
-    let mut conn = database::establish_connection();
-    database::create_master_user(&mut conn, phc_string)
+fn store_master_password(phc_string: &str, conn: &mut SqliteConnection) -> MasterUser {
+    database::create_master_user(conn, phc_string)
 }
 
 fn retrieve_master_password(conn: &mut SqliteConnection) -> MasterUser {
     let pw = database::fetch_master_user(conn);
     return match pw {
         Some(hash) => hash,
-        None => create_master_password(),
+        None => create_master_password(conn),
     };
 }
 
@@ -197,7 +198,7 @@ pub fn decrypt(data: &[u8], key: &[u8; 32], nonce: Nonce) -> String {
             // Do what you need to with the decrypted password
         }
         Err(e) => {
-            println!("{e}");
+            tcp_log!("{e}");
             // Oh no-an attacker tampered with the encrypted password
             panic!("An attacker might have tempered with the encrypted passwords file. Consider taking appropriate actions.")
         }
@@ -248,16 +249,23 @@ pub fn encrypt(data: &str, key_val: &[u8; 32]) -> (Vec<u8>, Nonce) {
     (encrypted, nonce)
 }
 
-pub fn store_encrypted(data: &str, host: &str, key: &[u8; 32]) -> CryptoData {
+pub fn store_encrypted(
+    data: &str,
+    host: &str,
+    key: &[u8; 32],
+    conn: &mut SqliteConnection,
+) -> CryptoData {
     let (encrypted, nonce) = encrypt(data, key);
     let n = nonce.to_db_string();
     let b64_encrypted = base64::prelude::BASE64_STANDARD.encode(&encrypted);
-    let mut conn = establish_connection();
-    database::create_crypto(&mut conn, &b64_encrypted, &n, &host)
+    database::create_crypto(conn, &b64_encrypted, &n, &host)
 }
-pub fn retrieve_encrypted(key: &[u8; 32], filter: CryptoFilterType) -> String {
-    let mut conn = database::establish_connection();
-    let crypto = database::fetch_crypto(&mut conn, filter);
+pub fn retrieve_encrypted(
+    key: &[u8; 32],
+    filter: CryptoFilterType,
+    conn: &mut SqliteConnection,
+) -> String {
+    let crypto = database::fetch_crypto(conn, filter);
     let cleartext_encrypted = decrypt(
         &base64::prelude::BASE64_STANDARD
             .decode(&crypto[0].encrypted)

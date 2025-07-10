@@ -24,6 +24,7 @@
 - [ ] add some color ?
 - [ ] maybe add a way to fold all the todos at once
 - [ ] Make the editor scrollable.
+- [ ] Maybe display the todo index in the list rather than the id at the top (and display the id somewhere else for clarity)
 
 # SECURITY 
 

@@ -1,29 +1,76 @@
 //use crate::schema::projects::dsl::*;
 use diesel::prelude::*;
+use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::sqlite::SqliteConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use dotenvy::dotenv;
 use std::env;
 use std::path::Path;
+use std::time::Duration;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
-
+pub const SEEDS_LAN: EmbeddedMigrations = embed_migrations!("./migrations/");
+pub const SEEDS_LANG: EmbeddedMigrations = embed_migrations!("./seeds/language");
 pub fn run_migration(conn: &mut SqliteConnection) {
     conn.run_pending_migrations(MIGRATIONS).unwrap(); //.run_pending_migrations(MIGRATIONS).unwrap();
-}
-pub fn establish_connection() -> SqliteConnection {
-    dotenv().ok();
-    //todo dotenv for devs
-    let mut database_path = match env::current_exe() {
-        Ok(exe_path) => exe_path.to_owned(),
-        Err(e) => panic!("failed to get current exe path: {e}"),
+    let langs = fetch_languages(conn, "a");
+    if !langs.iter().any(|language| language.name == "none") {
+        // let has = conn.has_pending_migration(SEEDS_LANG).unwrap();
+        conn.run_pending_migrations(SEEDS_LANG).unwrap();
     };
-    database_path.pop();
-    database_path.push(Path::new("projects.db"));
-    let database_url: &str = database_path.to_str().unwrap();
-    // env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    SqliteConnection::establish(database_url)
-        .unwrap_or_else(|_| panic!("Error connecting to database url..."))
 }
+
+// #[derive(Debug)]
+// pub struct ConnectionOptions {
+//     pub enable_wal: bool,
+//     pub enable_foreign_keys: bool,
+//     pub busy_timeout: Option<Duration>,
+// }
+//
+// impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
+//     for ConnectionOptions
+// {
+//     fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
+//         (|| {
+//             if self.enable_wal {
+//                 // conn.batch_execute("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;")?;
+//             }
+//             if self.enable_foreign_keys {
+//                 conn.batch_execute("PRAGMA foreign_keys = ON;")?;
+//             }
+//             if let Some(d) = self.busy_timeout {
+//                 conn.batch_execute(&format!("PRAGMA busy_timeout = {};", d.as_millis()))?;
+//             }
+//             Ok(())
+//         })()
+//         .map_err(diesel::r2d2::Error::QueryError)
+//     }
+// }
+
+pub fn generate_pool() -> Pool<ConnectionManager<SqliteConnection>> {
+    // TODO : remove unwraps
+    let db = crate::config::db_path().unwrap();
+    let db = db.to_str().unwrap();
+    dbg!(db);
+    let manager = diesel::r2d2::ConnectionManager::<SqliteConnection>::new(db);
+    diesel::r2d2::Pool::builder()
+        .build(manager)
+        .expect("Failed to create pool.")
+}
+
+// pub fn establish_connection() -> SqliteConnection {
+//     dotenv().ok();
+//     //todo dotenv for devs
+//     let mut database_path = match env::current_exe() {
+//         Ok(exe_path) => exe_path.to_owned(),
+//         Err(e) => panic!("failed to get current exe path: {e}"),
+//     };
+//     database_path.pop();
+//     database_path.push(Path::new("projects.db"));
+//     let database_url: &str = database_path.to_str().unwrap();
+//     // env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+//     SqliteConnection::establish(database_url)
+//         .unwrap_or_else(|_| panic!("Error connecting to database url..."))
+// }
 
 use crate::models::{
     CryptoData, Language, MasterUser, NewCryptoData, NewLanguage, NewMasterUser, NewStoredSsh,
@@ -107,6 +154,14 @@ pub fn create_language(conn: &mut SqliteConnection, name: &str) -> Language {
         .get_result(conn)
         .expect("Error saving new post")
 }
+
+pub fn single_project(conn: &mut SqliteConnection, project_name: &str) -> Project {
+    projects::table
+        .filter(projects::name.eq(project_name))
+        .first(conn)
+        .expect("The database request failed.")
+}
+
 //todo add by name
 pub fn fetch_projects(
     conn: &mut SqliteConnection,
@@ -142,8 +197,7 @@ pub fn fetch_projects(
         }
     }
 }
-pub fn all_projects() -> Vec<ProjectWithLanguageName> {
-    let conn = &mut establish_connection();
+pub fn all_projects(conn: &mut SqliteConnection) -> Vec<ProjectWithLanguageName> {
     projects::table
         .inner_join(languages::table)
         .select((projects::all_columns, languages::name))
@@ -218,6 +272,31 @@ pub fn create_project(
         .expect("Error saving new post")
 }
 
+pub fn alter_project_path(
+    id: &i32,
+    path: &Path,
+    conn: &mut SqliteConnection,
+) -> Result<Success, DatabaseError> {
+    let resolved = std::path::absolute(path).unwrap();
+    if let Err(err) = resolved.canonicalize() {
+        return Err(DatabaseError::new(&err.to_string()));
+    };
+
+    diesel::update(projects::table.filter(projects::dsl::id.eq(id)))
+        .set(projects::dsl::path.eq(resolved.to_str().expect(
+        "This is not a valid utf8 path. Contact the developer if you actually need this feature",
+    ))).execute(conn);
+    Ok(Success::new(
+        "Successfully edited the project's path.".into(),
+        crate::ui::SuccessType::Database,
+    ))
+}
+pub fn get_language(id: &i32, conn: &mut SqliteConnection) -> Language {
+    languages::table
+        .find(id)
+        .first(conn)
+        .expect("Invalid lang id")
+}
 pub fn get_language_by_name(conn: &mut SqliteConnection, name: &str) -> Language {
     //  use crate::schema::languages;
 
@@ -237,25 +316,24 @@ pub fn get_language_by_name(conn: &mut SqliteConnection, name: &str) -> Language
 
 use crate::models::{NewTodo, Todo, UpdateTodo};
 use crate::schema::todos;
+use crate::ui::{DatabaseError, Success};
 
 /// True batch create. Returns the number of rows affected.
 /// Should be updated with proper handling
-pub fn batch_create_todo(todos: &Vec<NewTodo>) -> usize {
-    let mut conn = establish_connection();
+pub fn batch_create_todo(todos: &Vec<NewTodo>, conn: &mut SqliteConnection) -> usize {
     if todos.is_empty() {
         return 0;
     }
     diesel::insert_into(todos::table)
         .values(todos)
-        .execute(&mut conn)
+        .execute(conn)
         .expect("error saving todo")
 }
 
 /// Edits a batch of todo; returns the number of todos updated. Each one generates a different
 /// SQL request.
-pub fn batch_edit_todo(todo_list: Vec<UpdateTodo>) -> usize {
+pub fn batch_edit_todo(todo_list: Vec<UpdateTodo>, conn: &mut SqliteConnection) -> usize {
     // crate::schema::todos::table.filter
-    let mut conn = establish_connection();
     if todo_list.is_empty() {
         return 0;
     }
@@ -266,7 +344,7 @@ pub fn batch_edit_todo(todo_list: Vec<UpdateTodo>) -> usize {
                 todos::content.eq(todo.content),
                 todos::title.eq(todo.title),
             ))
-            .execute(&mut conn)
+            .execute(conn)
             .expect("error updating todo");
     }
     todo_list.len()
@@ -276,63 +354,57 @@ pub fn batch_edit_todo(todo_list: Vec<UpdateTodo>) -> usize {
     //     .execute(&mut conn)
     //     .expect("error saving todo")
 }
-pub fn update_todo(todo: UpdateTodo) -> usize {
+pub fn update_todo(todo: UpdateTodo, conn: &mut SqliteConnection) -> usize {
     // crate::schema::todos::table.filter
-    let mut conn = establish_connection();
     diesel::update(todos::table.filter(todos::id.eq(todo.id)))
         .set((
             todos::subtitle.eq(todo.subtitle),
             todos::content.eq(todo.content),
             todos::title.eq(todo.title),
         ))
-        .execute(&mut conn)
+        .execute(conn)
         .expect("error updating todo")
 }
 // diesel::insert_into(todos::table)
 //     .values(&todos)
 //     .execute(&mut conn)
 /// Inserts a single todo; returns it with it's Id.
-pub fn create_todo(todo: NewTodo) -> Todo {
-    let mut conn = establish_connection();
+pub fn create_todo(todo: NewTodo, conn: &mut SqliteConnection) -> Todo {
     diesel::insert_into(todos::table)
         .values(&todo)
         .returning(Todo::as_returning())
-        .get_result(&mut conn)
+        .get_result(conn)
         .expect("error saving todo")
 }
 
-pub fn delete_all_todos(project_id: &i32) {
-    let mut conn = establish_connection();
+pub fn delete_all_todos(project_id: &i32, conn: &mut SqliteConnection) {
     diesel::delete(todos::table.filter(todos::project_id.eq(project_id)))
-        .execute(&mut conn)
+        .execute(conn)
         .unwrap_or_else(|_| (panic!("Error deleting todos related to project {}", project_id)));
 }
 
 /// Deletes a single todo for a given Todo ID.
-pub fn delete_todo(id: &i32) {
-    let mut conn = establish_connection();
+pub fn delete_todo(id: &i32, conn: &mut SqliteConnection) {
     diesel::delete(todos::table.filter(todos::id.eq(id)))
-        .execute(&mut conn)
+        .execute(conn)
         .unwrap_or_else(|_| (panic!("Error deleting todo {}", id)));
 }
 /// Returns a single todo for a given Todo ID.
-pub fn get_todo_id(id: i32) -> Todo {
-    let mut conn = establish_connection();
+pub fn get_todo_id(id: i32, conn: &mut SqliteConnection) -> Todo {
     todos::table
         .filter(todos::dsl::id.eq(id))
         .select(Todo::as_select())
-        .load(&mut conn)
+        .load(conn)
         .expect("error handling ssh")
         .pop()
         .expect("No Todo found with corresponding id")
 }
 
-pub fn get_todos_for_proj(project_id: i32) -> Vec<Todo> {
-    let mut conn = establish_connection();
+pub fn get_todos_for_proj(project_id: i32, conn: &mut SqliteConnection) -> Vec<Todo> {
     todos::table
         .filter(todos::dsl::project_id.eq(project_id))
         .select(Todo::as_select())
-        .load(&mut conn)
+        .load(conn)
         .expect("No Todos found...")
 }
 
@@ -392,6 +464,9 @@ pub fn get_ssh_by_project(conn: &mut SqliteConnection, project_name: &str) -> Ve
 pub fn get_script(_conn: &mut SqliteConnection, _name: Option<&str>) {}
 
 pub trait Save<S> {
-    fn save_to_db(&mut self) -> Result<crate::ui::Success, crate::ui::DatabaseError>;
+    fn save_to_db(
+        &mut self,
+        conn: &mut SqliteConnection,
+    ) -> Result<crate::ui::Success, crate::ui::DatabaseError>;
     fn to_saved_format(&mut self) -> S;
 }

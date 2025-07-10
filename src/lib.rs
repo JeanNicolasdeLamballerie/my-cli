@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod cli;
 pub mod config;
 pub mod database;
 pub mod editor;
@@ -7,8 +8,10 @@ pub mod fonts;
 pub mod logger;
 pub mod models;
 pub mod mover;
+pub mod projects_ui;
 pub mod run;
 pub mod schema;
+pub mod server;
 pub mod ssh;
 pub mod todos;
 mod ui;
