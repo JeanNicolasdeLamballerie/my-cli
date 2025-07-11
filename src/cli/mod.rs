@@ -451,7 +451,10 @@ fn open_todo(
                 let msg = format!("The path {} cannot be found. Consider removing or disabling the project ({}) ...", &project.path, project.name);
 
                 // FIX: Fix the mutex
-                // warnings.lock().unwrap().push(Warning::new(&msg, true))
+                warnings
+                    .lock()
+                    .unwrap()
+                    .push(crate::exceptions::Warning::new(&msg, true));
             }
         };
     }

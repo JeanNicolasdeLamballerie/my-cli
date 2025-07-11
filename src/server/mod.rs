@@ -1,6 +1,5 @@
 use std::{env::current_exe, ffi::OsString, thread::spawn as spawn_thread};
 
-use log::trace;
 pub mod daemon;
 pub mod log_queue;
 pub mod port;

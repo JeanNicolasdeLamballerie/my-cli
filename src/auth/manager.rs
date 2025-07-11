@@ -136,7 +136,7 @@ fn create_master_password(conn: &mut SqliteConnection) -> MasterUser {
     let argon2 = Argon2::default();
 
     // Hash password to PHC string ($argon2id$v=19$...)
-    let password_hash = match argon2.hash_password(&password.as_bytes(), &salt) {
+    let password_hash = match argon2.hash_password(password.as_bytes(), &salt) {
         Ok(hashed) => hashed.to_string(),
         Err(error) => {
             panic!("An error occured while hashing the password. See below : {NL} {error}")
@@ -160,7 +160,7 @@ fn verify_master_password(conn: &mut SqliteConnection, cipher_pass: String) -> [
     };
     //TODO change assert ?
     assert!(Argon2::default()
-        .verify_password(&cipher_pass.as_bytes(), &parsed_hash)
+        .verify_password(cipher_pass.as_bytes(), &parsed_hash)
         .is_ok());
 
     let mut key_val: [u8; 32] = [0; 32];
@@ -179,10 +179,10 @@ fn store_master_password(phc_string: &str, conn: &mut SqliteConnection) -> Maste
 
 fn retrieve_master_password(conn: &mut SqliteConnection) -> MasterUser {
     let pw = database::fetch_master_user(conn);
-    return match pw {
+    match pw {
         Some(hash) => hash,
         None => create_master_password(conn),
-    };
+    }
 }
 
 pub fn decrypt(data: &[u8], key: &[u8; 32], nonce: Nonce) -> String {
@@ -211,15 +211,13 @@ pub fn decrypt(data: &[u8], key: &[u8; 32], nonce: Nonce) -> String {
 
 // }
 pub fn nonce_from_db_string(nonce_string: &str) -> Nonce {
-    let mut i: usize = 0;
     let mut nonce: [u8; 12] = [0; 12];
-    for string_u8 in nonce_string.split(",") {
+    for (i, string_u8) in nonce_string.split(",").enumerate() {
         if i >= 12 {
             panic!("This array should not be longer than 32 bytes...");
         }
         let nonce_chunk = string_u8.parse::<u8>().unwrap();
         nonce[i] = nonce_chunk;
-        i += 1;
     }
     nonce.into()
 }
@@ -234,7 +232,7 @@ impl DbReady for Nonce {
             db_string += ",";
         }
         db_string.pop();
-        return db_string;
+        db_string
     }
 }
 
@@ -258,7 +256,7 @@ pub fn store_encrypted(
     let (encrypted, nonce) = encrypt(data, key);
     let n = nonce.to_db_string();
     let b64_encrypted = base64::prelude::BASE64_STANDARD.encode(&encrypted);
-    database::create_crypto(conn, &b64_encrypted, &n, &host)
+    database::create_crypto(conn, &b64_encrypted, &n, host)
 }
 pub fn retrieve_encrypted(
     key: &[u8; 32],
@@ -266,12 +264,11 @@ pub fn retrieve_encrypted(
     conn: &mut SqliteConnection,
 ) -> String {
     let crypto = database::fetch_crypto(conn, filter);
-    let cleartext_encrypted = decrypt(
+    decrypt(
         &base64::prelude::BASE64_STANDARD
             .decode(&crypto[0].encrypted)
             .unwrap(),
         key,
         nonce_from_db_string(&crypto[0].nonce),
-    );
-    cleartext_encrypted
+    )
 }

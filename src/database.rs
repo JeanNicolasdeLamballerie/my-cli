@@ -3,10 +3,7 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::sqlite::SqliteConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use dotenvy::dotenv;
-use std::env;
 use std::path::Path;
-use std::time::Duration;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 pub const SEEDS_LAN: EmbeddedMigrations = embed_migrations!("./migrations/");
 pub const SEEDS_LANG: EmbeddedMigrations = embed_migrations!("./seeds/language");
@@ -281,11 +278,11 @@ pub fn alter_project_path(
     if let Err(err) = resolved.canonicalize() {
         return Err(DatabaseError::new(&err.to_string()));
     };
-
+    // TODO: FIX these unwraps
     diesel::update(projects::table.filter(projects::dsl::id.eq(id)))
         .set(projects::dsl::path.eq(resolved.to_str().expect(
         "This is not a valid utf8 path. Contact the developer if you actually need this feature",
-    ))).execute(conn);
+    ))).execute(conn).unwrap();
     Ok(Success::new(
         "Successfully edited the project's path.".into(),
         crate::ui::SuccessType::Database,

@@ -10,7 +10,11 @@ pub struct LogQueue {
     queue: Mutex<VecDeque<String>>,
     notify: Notify,
 }
-
+impl Default for LogQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl LogQueue {
     pub fn new() -> Self {
         Self {

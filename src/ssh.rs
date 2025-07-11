@@ -1,16 +1,8 @@
-use std::{
-    io::{BufRead, BufReader, Write},
-    process::{Command, Stdio},
-    thread::park_timeout,
-    time::Duration,
-};
+use std::process::Command;
 
 use diesel::SqliteConnection;
 
-use crate::{
-    database::{create_ssh, get_ssh},
-    logger::{print, TablingOptionsBuilder},
-};
+use crate::logger::TablingOptionsBuilder;
 
 pub fn ssh_into(
     conn: &mut SqliteConnection,

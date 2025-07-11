@@ -1,15 +1,9 @@
-use once_cell::sync::OnceCell;
-use std::collections::VecDeque;
 use std::env::current_exe;
-use std::io::{BufRead, Read, Write};
-use std::ops::Deref;
+use std::io::{BufRead, Write};
 // use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, BufReader, ReadHalf, WriteHalf};
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::io::AsyncBufReadExt;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Mutex;
-use tokio::task_local;
 
 use clap::{CommandFactory, Parser};
 use diesel::r2d2::{ConnectionManager, Pool};
@@ -20,7 +14,6 @@ use crate::exceptions::Warning;
 use tokio::io::AsyncWriteExt;
 // Your Clap-based CLI parser
 use crate::cli::Cli;
-use crate::server::log_queue::LOG_QUEUE;
 use crate::server::{port, shim_gen}; // assuming this is your Clap parser
                                      // use lazy_static::lazy_static;
                                      // use tokio::task::LocalKey

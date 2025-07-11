@@ -10,10 +10,8 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(target_os = "windows")]
 pub const NL: &str = "\r\n";
-
 #[cfg(not(target_os = "windows"))]
 pub const NL: &str = "\n";
-
 fn main() {
     let entry = my_cli::cli::EntryPoint::parse();
     // let warnings: Arc<Mutex<Vec<Warning>>> = Arc::new(Mutex::new(Vec::new()));

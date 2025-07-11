@@ -1,11 +1,8 @@
-use std::{env::current_dir, process::Command};
+use std::process::Command;
 
 use diesel::SqliteConnection;
 
-use crate::{
-    database::{fetch_project_by_path, fetch_single_project},
-    tcp_log,
-};
+use crate::database::fetch_single_project;
 
 pub fn run_command(conn: &mut SqliteConnection, name: &Option<String>, command: &Option<String>) {
     // tcp_log!(stream, "{:?}, {:?}", name, command);

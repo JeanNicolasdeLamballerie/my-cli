@@ -35,5 +35,5 @@ pub enum UnicodeError {
 
 pub fn parse_unicode(input: &str) -> Result<char, UnicodeError> {
     let unicode = u32::from_str_radix(input, 16).map_err(UnicodeError::Int)?;
-    char::from_u32(unicode).ok_or_else(|| UnicodeError::Unicode(unicode))
+    char::from_u32(unicode).ok_or(UnicodeError::Unicode(unicode))
 }

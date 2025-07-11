@@ -1,6 +1,5 @@
 use diesel::{
     r2d2::{ConnectionManager, PooledConnection},
-    sqlite::Sqlite,
     SqliteConnection,
 };
 use eframe::App;
